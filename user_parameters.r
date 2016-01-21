@@ -6,6 +6,8 @@
 project_stem_dir <- "E:/Phylo_modelling/"
 climate_data_dir <- "E:/BCM/CA_2014/Summary/HST/Normals_30years/"
 occurrence_data_dir <- "E:/Phylo_modelling/Data/Species"
+maxent_output_dir <- "E:/Phylo_modelling/Output/Maxent"
+charts_output_dir <- "E:/Phylo_modelling/Output/Charts"
 
 # number of nodes to use for parallel processing jobs
 # (shoud be no greater than number of processors in your machine)
