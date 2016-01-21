@@ -10,18 +10,23 @@ library(dismo)
 library(doParallel)
 
 
+######### file paths ##########
+# source user_parameters.r before running #
+
+clim_dir <- climate_data_dir
+model_dir <- paste0(project_stem_dir, "/Output/Maxent/v3")
+richness_dir <- paste0(project_stem_dir, "/Output/Richness")
+pr_dir <- paste0(project_stem_dir, "/Data/Richness/point_richness_rasters")
+
+
 
 ######### climate data ###########
-
-clim_dir <- "E:/BCM/CA_2014/Summary/HST/Normals_30years/"
 env.files <- list.files(path=clim_dir, pattern='.data', full.names=FALSE)
 climnames <- sort(c("cwd","djf","jja","ppt")) #use sort to ensure correct names used for predictors
 files <- env.files[which(substr(env.files,5,8)%in%'810m')]
 
 
 ######### maxent models ###############
-
-model_dir <- "E:/Phylo_modelling/output/maxent/v3"
 spp_dirs <- list.dirs(model_dir, full.names=T, recursive=F)
 
 
@@ -36,7 +41,7 @@ predictBinary <- function(model, predictors){
         return(pred)
 }
 
-cl <- makeCluster(6)
+cl <- makeCluster(nodes)
 registerDoParallel(cl)
 
 results <- foreach(spp = spp_dirs,
@@ -73,7 +78,7 @@ sumRasters <- function(dir, pattern){
 }
 
 richness <- sumRasters(model_dir, "BinaryRangePrediction.rds")
-writeRaster(richness, "E:/Phylo_modelling/Output/Richness/richness.tif", overwrite=T)
+writeRaster(richness, paste0(richness_dir, "/richness.tif"), overwrite=T)
 
 
 ######### plot #########
@@ -112,7 +117,7 @@ l <- ggplot(h, aes(lyr, n, fill=lyr)) +
               axis.text.y=element_blank(), axis.title.y=element_blank(), axis.ticks.y=element_blank(), legend.position="none") +
         labs(x="number of species")
 
-png("E:/Phylo_modelling/Output/Richness/richness.png", width = 1000, height = 1500)
+png(paste0(richness_dir, "/richness.png"), width = 1000, height = 1500)
 plot(p)
 print(l, 
       vp=viewport(x = .5, y = .55, 
@@ -140,7 +145,6 @@ upscale <- function(file, template, tag){
         return("upscaled")
 }
 
-pr_dir <- "E:/Phylo_modelling/Data/Richness/point_richness_rasters"
 pr_files <- list.files(pr_dir, pattern=".grd", full.names=T)
 
 cl <- makeCluster(7)
@@ -158,15 +162,15 @@ stopCluster(cl)
 ### sum to create richness maps at both resolutions ###
 
 writeRaster(sumRasters(model_dir, "BinaryRangePrediction_25k.rds"), 
-            "E:/Phylo_modelling/Output/Richness/richness_25k.tif", overwrite=T)
+            paste0(richness_dir, "/richness_25k.tif"), overwrite=T)
 writeRaster(sumRasters(model_dir, "BinaryRangePrediction_50k.rds"),
-            "E:/Phylo_modelling/Output/Richness/richness_50k.tif", overwrite=T)
+            paste0(richness_dir, "/richness_50k.tif"), overwrite=T)
 
 
 ### compare to occurrence density maps ###
 
 for(res in c("25", "50")){
-        r <- stack(raster(paste0("E:/Phylo_modelling/Output/Richness/richness_", res, "k.tif")),
+        r <- stack(raster(paste0(richness_dir, "/richness_", res, "k.tif")),
                      stack(pr_files[grepl(paste0(res, "k"), pr_files)]))
         names(r) <- c("maxent", "rarefied", "raw")
         r <- mask(r, r[[3]])
@@ -221,11 +225,11 @@ for(res in c("25", "50")){
         
         p <- arrangeGrob(p1, p2, p3, ncol=1)
         
-        png(paste0("E:/Phylo_modelling/Output/Richness/richness_comparison_", res, ".png"), width=1000, height=1500)
+        png(paste0(paste0(richness_dir, "/richness_comparison_", res, ".png")), width=1000, height=1500)
         grid.draw(p)
         dev.off()
         
-        png(paste0("E:/Phylo_modelling/Output/Richness/richness_scatterplots_", res, ".png"), width=500, height=500)
+        png(paste0(paste0(richness_dir, "/richness_scatterplots_", res, ".png")), width=500, height=500)
         pairs(r[c("maxent", "rarefied", "raw")])
         dev.off()
 }
@@ -258,4 +262,4 @@ rd <- lapply(rd, as.vector)
 rd <- do.call("rbind", rd)
 rd <- cbind(basename(spp_dirs[good]), as.data.frame(rd))
 names(rd) <- c("species", "range_810m", "range_25km", "range_50km")
-write.csv(rd, "E:/Phylo_modelling/Output/Richness/range_size.csv", row.names=F)
+write.csv(rd, paste0(richness_dir, "/range_size.csv"), row.names=F)

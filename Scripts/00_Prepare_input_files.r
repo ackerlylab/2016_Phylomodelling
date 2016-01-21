@@ -6,15 +6,11 @@ rm(list=ls())
 #-----------------#
 # Set directories #
 #-----------------#
-Computer <- 'Ackerly'
 
-if(Computer == 'Ackerly') {
-  wdir <- 'E:/Phylo_modelling/'
-  cdir <- 'E:/BCM/CA_2014/Summary/HST/Normals_30years/'
-} else if (Computer == 'HP') {
-  wdir <- 'D:/Phylo_modelling/'
-  cdir <- 'D:/BCM/CA_2014/Summary/HST/Normals_30years/'
-}
+# source user_parameters.r before running
+
+wdir <- project_stem_dir
+cdir <- climate_data_dir
 
 spdir <- paste(wdir, 'Data/Species/', sep='')
 outspdir <- paste(wdir, 'Data/Species/Processed3/',sep='')
@@ -68,9 +64,9 @@ names(fill_predictors) = climnames
 
 # Aggregate climate layers to ~800m resolution
 for(i in 1:4) {
-  lyr <- predictors[[i]]
-  ag <- aggregate(lyr,3,na.rm=T,fun=mean)
-  saveRDS(ag, paste(cdir, climnames[i],'_810m.rdata', sep=''))
+      lyr <- predictors[[i]]
+      ag <- aggregate(lyr,3,na.rm=T,fun=mean)
+      saveRDS(ag, paste(cdir, climnames[i],'_810m.rdata', sep=''))
 }
 preds810 <- stack(lapply(climnames,function(x) readRDS(paste(cdir, x,'_810m.rdata', sep=''))))
 
@@ -102,10 +98,10 @@ ras <- raster(xmn=-400000,xmx=550000,ymn=-650000,ymx=450000,res=50000,vals=0,crs
 #---------------------------#
 files <- list.files(path=spdir, pattern='.csv', full.names=T)
 df <- do.call("rbind", lapply(files, FUN=function(x){
-  f <- read.csv(x,as.is=T)[,cols]
-  f$source_file <- x
-  return(f)
-  }))
+      f <- read.csv(x,as.is=T)[,cols]
+      f$source_file <- x
+      return(f)
+}))
 
 splist_raw <- sort(unique(df[,'current_name_binomial']))
 
@@ -121,15 +117,15 @@ saveRDS(splist_clean, file=paste(outspdir,'0_Species_list_v2.rdata',sep=''))
 
 #For each species, save dataframe with occurrences
 for(i in 1:length(splist_clean)) {
-  species <- splist_clean[i]
-  occur_raw <- subset(df_clean, current_name_binomial==species)
-  occur <- subset(occur_raw, !is.na(latitude) & !is.na(longitude))
-  row.names(occur) <- NULL
-  
-  saveRDS(occur, file=paste(outspdir,species,'.rdata',sep=''))
-  print(i)
+      species <- splist_clean[i]
+      occur_raw <- subset(df_clean, current_name_binomial==species)
+      occur <- subset(occur_raw, !is.na(latitude) & !is.na(longitude))
+      row.names(occur) <- NULL
+      
+      saveRDS(occur, file=paste(outspdir,species,'.rdata',sep=''))
+      print(i)
 }
- 
+
 
 #----------------------------#
 # How many records in water? #
@@ -228,7 +224,7 @@ saveRDS(bg, file=paste(outspdir,'10000_CA_plants_bg_810m.rdata',sep=''))
 # Flag species not modelled #
 #---------------------------#
 df_bad <- subset(df, !current_name_binomial%in%splist | is.na(latitude) | is.na(longitude) | latitude <0)[,c(
-  'id','current_name_binomial','latitude','longitude')]
+      'id','current_name_binomial','latitude','longitude')]
 df_bad$flag <- NA
 df_bad$flagreason <- NA
 df_bad$flag[is.na(df_bad$latitude) | is.na(df_bad$longitude)] <- 1
@@ -244,7 +240,7 @@ df_bad$flag[df_bad$current_name_binomial == ''] <- 4
 df_bad$flagreason[df_bad$flag == 4] <- 'missing species binomial'
 
 df_bad$flag[!df_bad$current_name_binomial %in% splist & (is.na(df_bad$latitude) | df_bad$latitude < 0) |
-              !df_bad$current_name_binomial %in% splist & (is.na(df_bad$longitude) | df_bad$longitude > 0)] <- 5
+                  !df_bad$current_name_binomial %in% splist & (is.na(df_bad$longitude) | df_bad$longitude > 0)] <- 5
 df_bad$flagreason[df_bad$flag == 5] <- 'multiple errors'
 
 row.names(df_bad) <- NULL
