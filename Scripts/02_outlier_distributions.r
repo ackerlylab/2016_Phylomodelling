@@ -8,9 +8,11 @@ library(doParallel)
 library(scales)
 library(ggmap)
 
-# input data
-spp_dirs <- list.dirs("E:/Phylo_modelling/Output/Maxent/V2", recursive=F)
-cdir <- 'E:/BCM/CA_2014/Summary/HST/Normals_30years/'
+###### file paths ######
+# source user_parameters.r before running
+cdir <- climate_data_dir
+spp_dirs <- list.dirs(paste0(maxent_modeling_dir, "/V2"), recursive=F)
+outdir <- paste0(charts_output_dir, "/Mapped_outliers")
 
 
 # compile a master data frame of all points
@@ -58,7 +60,7 @@ p <- ggplot(d, aes(prop_max)) +
         labs(x="threshold (prop max obs suitability)", 
              y="proportion of total records flagged",
              title="Distribution of maxent outliers, overall")
-ggsave("E:/Phylo_modelling/Output/Charts/outlier_curve_overall_V2.png", p, width=8, height=6)
+ggsave(paste0(charts_output_dir, "/outlier_curve_overall_V2.png"), p, width=8, height=6)
 
 p <- ggplot(s, aes(anomaly_rate, color=factor(threshold))) + 
         stat_ecdf(size=1) +
@@ -67,13 +69,12 @@ p <- ggplot(s, aes(anomaly_rate, color=factor(threshold))) +
              color="threshold\n(prop.max.occ)",
              title="Distirbution of maxent outliers, species-wise") +
         scale_x_log10(breaks=10^(-3:1))
-ggsave("E:/Phylo_modelling/Output/Charts/outlier_curves_V2.png", p, width=8, height=6)
+ggsave(paste0(charts_output_dir, "/outlier_curves_V2.png"), p, width=8, height=6)
 
 
 
 
 # PCA of all CA climate values
-cdir <- 'E:/BCM/CA_2014/Summary/HST/Normals_30years/'
 cfiles <- list.files(cdir, pattern="filled", full.names=T)
 clim <- lapply(cfiles, readRDS)
 clim <- do.call("stack", clim)
@@ -166,4 +167,19 @@ library(doParallel)
 #registerDoParallel(cl)
 results <- foreach(sp = unique(d$spp)) %do% { try(outlier_map(sp)) }
 #stopCluster(cl)
+
+
+
+### copy charts to second consolidated location
+
+infiles <- list.files(paste0(maxent_modeling_dir, "/V2"), pattern="outlier_map_v3.png", recursive=T, full.names=T)
+
+for(file in infiles){
+      dir <- dirname(file)
+      species <- substr(dirname(file), tail(gregexpr("/", dir)[[1]], 1)+1, 1000)
+      newfile <- paste0(outdir, "/", species, ".png")
+      if(file.exists(newfile)) next()
+      #writeLines(paste("moved", species))
+      file.copy(file, newfile)
+}
 

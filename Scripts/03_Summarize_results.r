@@ -6,32 +6,28 @@ rm(list=ls())
 #-----------------#
 # Set directories #
 #-----------------#
-Computer <- 'Ackerly'
 
-if(Computer == 'Ackerly') {
-  wdir <- 'E:/Phylo_modelling/'
-  cdir <- 'E:/BCM/CA_2014/Summary/HST/Normals_30years/'
-} else if (Computer == 'HP') {
-  wdir <- 'D:/Phylo_modelling/'
-  cdir <- 'D:/BCM/CA_2014/Summary/HST/Normals_30years/'
-}
+# source user_parameters.r before running
+
+wdir <- project_stem_dir
+cdir <- climate_data_dir
 
 spdir <- paste(wdir, 'Data/Species/Processed/', sep='')
 odir <- paste(wdir, 'Output/', sep='')
 
 # What species?
 allSpecies <- sort(readRDS(paste(spdir, '0_Species_list.rdata', sep='')))
-spp_dirs <- list.dirs("E:/Phylo_modelling/Output/Maxent/V2", recursive=F)
+spp_dirs <- list.dirs(paste0(odir, "/Maxent/V2"), recursive=F)
 
 res <- list()
 res2 <- list()
 #for(i in 1:10) {
 for(i in 1:length(allSpecies)) {
   x <- allSpecies[i]
-  if (!file.exists(paste0("E:/Phylo_modelling/Output/Maxent/V2/", x, "/Suitability_data.rdata"))) {
+  if (!file.exists(paste0(odir, "/Maxent/V2"/, x, "/Suitability_data.rdata"))) {
     next()
   }
-  d <- readRDS(paste0("E:/Phylo_modelling/Output/Maxent/V2/", x, "/Suitability_data.rdata"))
+  d <- readRDS(paste0(odir, "Maxent/V2/", x, "/Suitability_data.rdata"))
   f <- d$occur
   f$prop_max.suit.occ[f$prop_max.suit.occ<10e-4] <- 10e-4 # put a lower limit on the ratios
   f$outlier <- -log10(f$prop_max.suit.occ)
@@ -55,5 +51,5 @@ p <- ggplot(result2, aes(records.used, auc.train)) +
   theme_minimal() +
   labs(x="number of records", y="training AUC", 
        title=paste0("Maxent training AUC vs. number of records\n(n = ", nrow(result2), " plant species)"))
-ggsave("E:/Phylo_modelling/Output/Charts/auc_vs_records.png", p, width=8, height=6)
+ggsave(paste0(charts_output_dir, "/auc_vs_records.png"), p, width=8, height=6)
 

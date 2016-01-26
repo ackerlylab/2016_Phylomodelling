@@ -3,6 +3,7 @@
 # including list with training AUC, maximum suitability value, suitability
 # values for each occurrence ID and ratio suitability/max suitability
 
+# Last updated Jan 21 2015 by Naia Morueta-Holme
 
 # Clear workspace
 rm(list=ls())
@@ -11,20 +12,13 @@ start=Sys.time()
 #-----------------#
 # Set directories #
 #-----------------#
-Computer <- 'Ackerly'
 
-if(Computer == 'Ackerly') {
-        wdir <- 'E:/Phylo_modelling/'
-        cdir <- 'E:/BCM/CA_2014/Summary/HST/Normals_30years/'
-} else if (Computer == 'HP') {
-        wdir <- 'D:/Phylo_modelling/'
-        cdir <- 'D:/BCM/CA_2014/Summary/HST/Normals_30years/'
-}
+# source user_parameters.r before running
+# or user_parameters_maxent_cleaning.r to load original cleaning parameters
 
-spdir <- paste(wdir, 'Data/Species/Processed/', sep='')
-#bgfile <- paste(spdir, '10000_CA_plants_bg.rdata', sep='')
-bgfile <- paste(spdir, '10000_CA_plants_bg_1080m.rdata', sep='')
-odir <- paste(wdir, 'Output/', sep='')
+cdir <- climate_data_dir
+spdir <- occurrence_data_dir_processed
+odir <- maxent_output_dir
 
 #----------------#
 # Load libraries #
@@ -41,32 +35,40 @@ require(raster)
 env.files <- list.files(path=cdir, pattern='.data', full.names=FALSE)
 climnames <- sort(c("cwd","djf","jja","ppt")) #use sort to ensure correct names used for predictors
 mxModelType <- paste(climnames,collapse="-")
+files <- env.files[which(substr(env.files,5,5+nchar(searchString-1))%in%searchString)]
 
 # Arguments for maxent models
 mxArgs <- c("-a", "-z", "outputformat=raw", "maximumbackground=10000", 
             "nothreshold", "nohinge")
+
+# Version of maxent run (to assign output directory)
+version <- maxent_run_version
+
 # What species?
-allSpecies <- readRDS(paste(spdir, '0_Species_list.rdata', sep=''))
+splist <- species_list
+allSpecies <- readRDS(species_list)
 
-#--------------------------------------------#
-# Run full models with filled climate layers #
-#--------------------------------------------#
-# Updated: running on 1080 m resolution instead
+# Background file
+bgfile <- maxent_background
 
+# Number of nodes for parallel computing
+no.nodes <- nodes
 
-#files <- env.files[which(substr(env.files,5,10)%in%'filled')]
-files <- env.files[which(substr(env.files,5,9)%in%'1080m')]
+#------------------#
+# Run full models  #
+#------------------#
+
 predictors <- stack(lapply(files,function(x) readRDS(paste(cdir,x,sep=""))))
 names(predictors) = climnames 
 orig.project <- '+proj=longlat +ellps=WGS84'
 bg <- readRDS(bgfile)
 
 library(doParallel)
-cl <- makeCluster(7)
+cl <- makeCluster(no.nodes)
 registerDoParallel(cl)
 
 results <- foreach(i=1:length(allSpecies)) %dopar% {
-#for (i in 1:length(maxent_failed)) {
+#for (i in 1:length(allSpecies)) {
         options(java.parameters = "-Xmx1g" )
         require(dismo)
         require(rJava)
@@ -74,7 +76,6 @@ results <- foreach(i=1:length(allSpecies)) %dopar% {
         extract <- raster::extract
         
         mySpecies <- allSpecies[i]
-        #mySpecies <- maxent_failed[i]
         writeLines(mySpecies)
         Sys.time()
         
@@ -91,8 +92,7 @@ results <- foreach(i=1:length(allSpecies)) %dopar% {
         
         
         # Directory to write files to
-        #mx.dir = paste(odir, 'Maxent/V1/',mySpecies, sep="")
-        mx.dir = paste(odir, 'Maxent/V2/',mySpecies, sep="")
+        mx.dir = paste(odir, version, mySpecies, sep="/")
         if(file.exists(mx.dir) == F) {dir.create(mx.dir, recursive=T)} 
         
         # Run the model!
