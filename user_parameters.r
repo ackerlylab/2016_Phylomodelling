@@ -3,8 +3,9 @@
 # it is in .gitignore, so your local changes will not be pushed
 
 # directories
-project_stem_dir <- "E:/Phylo_modelling/"
-climate_data_dir <- "E:/BCM/CA_2014/Summary/HST/Normals_30years/"
+project_stem_dir <- "C:/Lab_projects/2016_Phylomodelling"
+climate_data_dir <- "E:/BCM/CA_2014/Summary/HST/Normals_30years"
+filled_climate_data_dir <- "C:/Lab_projects/Data/Climate/BCM_normals"
 occurrence_data_dir <- "E:/Phylo_modelling/Data/Species"
 maxent_output_dir <- "E:/Phylo_modelling/Output/Maxent"
 charts_output_dir <- "E:/Phylo_modelling/Output/Charts"
