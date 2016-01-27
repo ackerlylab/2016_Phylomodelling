@@ -12,7 +12,7 @@ rm(list=ls())
 wdir <- project_stem_dir
 cdir <- climate_data_dir
 
-spdir <- paste(wdir, 'Data/Species/', sep='')
+spdir <- paste(wdir, '/Data/Species/', sep='')
 outspdir <- paste(wdir, 'Data/Species/Processed3/',sep='')
 
 #----------------#
