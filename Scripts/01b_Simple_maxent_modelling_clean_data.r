@@ -2,10 +2,10 @@
 # Output includes maxent modelling files, and .rdata file for each species
 
 # By Naia Morueta-Holme
-# Last updated Jan 21 2015
+# Last updated by Matthew Kling Jan 26 2015
 
 # Clear workspace
-rm(list=ls())
+#rm(list=ls())
 start=Sys.time()
 
 #-----------------#
@@ -14,9 +14,9 @@ start=Sys.time()
 
 # source user_parameters.r before running
 
-cdir <- climate_data_dir
+cdir <- filled_climate_data_dir
 spdir <- occurrence_data_dir_processed
-odir <- maxent_output_dir
+odir <- maxent_output_dir#
 
 #----------------#
 # Load libraries #
@@ -30,11 +30,11 @@ require(raster)
 # Set parameters #
 #----------------#
 # Set the environmental file names
-env.files <- list.files(path=cdir, pattern='.data', full.names=FALSE)
+files <- list.files(path=cdir, pattern='810m_filled3x', full.names=FALSE)
 climnames <- sort(c("cwd","djf","jja","ppt")) #use sort to ensure correct names used for predictors
 mxModelType <- paste(climnames,collapse="-")
-searchString <- '810m'
-files <- env.files[which(substr(env.files,5,8)%in%searchString)]
+#searchString <- '810m'
+#files <- env.files[which(substr(env.files,5,8)%in%searchString)]
 
 # Arguments for maxent models
 mxArgs <- c("-a", "-z", "outputformat=raw", "maximumbackground=10000", 
@@ -57,7 +57,7 @@ no.nodes <- nodes
 # Run full models #
 #-----------------#
 
-predictors <- stack(lapply(files,function(x) readRDS(paste(cdir,x,sep=""))))
+predictors <- stack(lapply(files,function(x) readRDS(paste(cdir,x,sep="/"))))
 names(predictors) = climnames 
 orig.project <- '+proj=longlat +ellps=WGS84'
 bg <- readRDS(bgfile)
