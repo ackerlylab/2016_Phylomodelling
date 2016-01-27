@@ -50,7 +50,7 @@ d <- d %>%
         summarize(ncells=n(),
                   nrecords=mean(nrecords))
 
-write.csv(d, "C:/Lab_projects/2016_Phylomodelling/Output/Richness/species_occurrence_counts.csv")
+write.csv(d, "C:/Lab_projects/2016_Phylomodelling/git_files/data/species_occurrence_counts.csv")
 
 library(ggplot2)
 brks <- c(1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000)
