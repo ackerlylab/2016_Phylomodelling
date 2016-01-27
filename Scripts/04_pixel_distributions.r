@@ -2,6 +2,7 @@
 
 
 # check to see how many occurrences fall in water (NA climate values)
+# and distribution of number of unique grid cells with records per species
 
 library(raster)
 library(dplyr)
@@ -24,36 +25,42 @@ f <- spTransform(f, crs(r))
 
 # extract and count
 v <- raster::extract(r, f)
-length(v[is.na(v)])
+#length(v[is.na(v)])
 
 # look
-plot(r)
-plot(f[is.na(v),], add=T)
-table(f$current_name_binomial[is.na(v)])
+#plot(r)
+#plot(f[is.na(v),], add=T)
+#table(f$current_name_binomial[is.na(v)])
 
 
 ####### PIXELS/SPECIES FREQUENCY #######
 
 f <- f[!is.na(v),]
 p <- r
-values(p) <- runif(ncell(p), 0, 1000000)
+values(p) <- 1:ncell(p)
 p <- mask(p, r)
 d <- data.frame(spp=f$current_name_binomial,
                 px=raster::extract(p, f))
 d <- d %>%
+        group_by(spp) %>%
+        mutate(nrecords=n()) %>%
+        ungroup() %>%
         distinct() %>%
         group_by(spp) %>%
-        summarize(ncells=n())
+        summarize(ncells=n(),
+                  nrecords=mean(nrecords))
+
+write.csv(d, "C:/Lab_projects/2016_Phylomodelling/Output/Richness/species_occurrence_counts.csv")
 
 library(ggplot2)
 brks <- c(1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000)
-ggplot(d, aes(ncells)) + 
+p <- ggplot(d, aes(ncells)) + 
         stat_ecdf() +
         scale_x_log10(breaks=brks) +
         scale_y_continuous(breaks=seq(0,1,.1)) +
         labs(x="number of 810m pixels with occurrences",
              y="cumulative portion of species")
-ggsave("C:/Lab_projects/2016_Phylomodelling/Output/Charts/pixels_per_species_ecdf.png", width=6, height=6, units="in")
+ggsave("C:/Lab_projects/2016_Phylomodelling/Output/Charts/pixels_per_species_ecdf.png", p, width=6, height=6, units="in")
         
 dd <- d %>%
         group_by(ncells) %>%
@@ -61,7 +68,7 @@ dd <- d %>%
         arrange(ncells) %>%
         as.data.frame()
 
-ggplot(d, aes(ncells, nspp)) +
+p <- ggplot(dd, aes(ncells, nspp)) +
         geom_point() +
         scale_x_log10(breaks=brks) + 
         scale_y_log10(breaks=brks)
