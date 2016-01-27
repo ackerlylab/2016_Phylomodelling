@@ -2,7 +2,7 @@
 # Output includes maxent modelling files, and .rdata file for each species
 
 # By Naia Morueta-Holme
-# Last updated by Matthew Kling Jan 26 2015
+# Last updated by Matthew Kling Jan 27 2015
 
 # Clear workspace
 #rm(list=ls())
@@ -16,7 +16,10 @@ start=Sys.time()
 
 cdir <- filled_climate_data_dir
 spdir <- occurrence_data_dir_processed
-odir <- maxent_output_dir#
+odir <- maxent_output_dir
+species_list <- paste0(spdir, '/0_Species_list_v2.rdata')
+maxent_background <- paste(spdir, '10000_CA_plants_bg_810m.rdata', sep='')
+
 
 #----------------#
 # Load libraries #
@@ -85,7 +88,11 @@ results <- foreach(i=1:length(allSpecies)) %dopar% {
   
   # Directory to write files to
   mx.dir = paste(odir, version, mySpecies, sep="/")
-  if(file.exists(mx.dir) == F) {dir.create(mx.dir, recursive=T)} 
+  if(file.exists(mx.dir) == F) {dir.create(mx.dir, recursive=T)}
+  
+  # Drop occurrences that fall in the water
+  valid <- !is.na(extract(predictors[[1]], occur))
+  occur <- occur[valid,]
   
   # Run the model!
   mx <- try(maxent(predictors, p=occur, a=bg ,progress='text', path=mx.dir, args=mxArgs))
