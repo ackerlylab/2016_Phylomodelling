@@ -16,14 +16,19 @@ maxent_output_dir <- "C:/Lab_projects/2016_Phylomodelling/Output/Maxent/"
 # (shoud be no greater than number of processors in your machine)
 nodes <- 6
 
-# minimum number of records for maxent modeling
-maxent_min_records <- 10
-
 # Version of maxent run
 maxent_run_version <- "V4"
 
 # species list file name
-species_list <- paste0(spdir, '/0_Species_list_v2.rdata')
+#species_list <- paste0(spdir, '/0_Species_list_v2.rdata')
 
 # occurrence background file name for maxent
-maxent_background <- paste(spdir, '10000_CA_plants_bg_810m.rdata', sep='')
+#maxent_background <- paste(spdir, '10000_CA_plants_bg_810m.rdata', sep='')
+
+# minimum number of records for maxent modeling
+richness_min_cells <- 10
+
+# maxent threshold statistic
+maxent_threshold_stat <- "spec_sens"
+
+
