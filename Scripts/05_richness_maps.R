@@ -59,11 +59,6 @@ table(unlist(results))
 
 ######## richness map summed across species ###########
 
-# exclude species that occur in less than our threshold for minimum number of cells
-freqs <- read.csv(paste0(project_stem_dir, "/git_files/data/species_occurrence_counts.csv"), stringsAsFactors=F)
-min_cells <- richness_min_cells
-valid_species <- freqs$spp[freqs$ncells >= min_cells]
-
 sumRasters <- function(dir, pattern, species){
         # function returns the sum of all raster files in 'dir' (and subdirs) that match 'pattern' and are among 'species'
         files <- list.files(dir, pattern=pattern, full.names=T, recursive=T)
@@ -76,11 +71,26 @@ sumRasters <- function(dir, pattern, species){
         return(richness)
 }
 
-richness <- sumRasters(model_dir, "BinaryRangePrediction.rds", valid_species)
-writeRaster(richness, paste0(richness_dir, "/richness_810m_min", min_cells, ".tif"), overwrite=T)
+for(min_cells in c(0,10,30)){ # calculte richness for each of the three thresholds
+        
+        # exclude species that occur in less than our threshold for minimum number of cells
+        freqs <- read.csv(paste0(project_stem_dir, "/git_files/data/species_occurrence_counts.csv"), stringsAsFactors=F)
+        valid_species <- freqs$spp[freqs$ncells >= min_cells]
+        
+        # compute richness
+        richness <- sumRasters(model_dir, "BinaryRangePrediction.rds", valid_species)
+        
+        # clip to state border
+        cali <- rgdal::readOGR("C:/Lab_projects/2016_Phylomodelling/Data/Shapefiles/states", "cb_2014_us_state_500k")
+        cali <- cali[cali$NAME=="California",]
+        cali <- spTransform(cali, crs(richness))
+        richness <- mask(richness, cali)
+        
+        # save raster file
+        writeRaster(richness, paste0(richness_dir, "/richness_810m_min", min_cells, ".tif"), overwrite=T)
+}
 
-
-######### plot #########
+######### plots #########
 
 library(ggplot2)
 library(viridis)
@@ -89,43 +99,48 @@ library(dplyr)
 library(grid)
 library(gridExtra)
 
-richness <- raster(paste0(richness_dir, "/richness_810m_min", min_cells, ".tif"))
-r <- as.data.frame(rasterToPoints(richness))
-names(r) <- c("x", "y", "layer")
+for(min_cells in c(0,10,30)){ # create richness maps for each of the three thresholds
+        
+        richness <- raster(paste0(richness_dir, "/richness_810m_min", min_cells, ".tif"))
+        r <- as.data.frame(rasterToPoints(richness))
+        names(r) <- c("x", "y", "layer")
+        
+        # map
+        p <- ggplot(r, aes(x, y, fill=layer)) +
+                geom_raster() +
+                scale_fill_viridis() +
+                coord_fixed(ratio=1) +
+                theme(panel.background=element_blank(), panel.grid=element_blank(),
+                      axis.text=element_blank(), axis.title=element_blank(), axis.ticks=element_blank(),
+                      legend.position="none", title=element_text(size=25)) +
+                guides(fill = guide_colorbar(barwidth=20)) +
+                labs(title=paste0("PLANT SPECIES RICHNESS\n(MaxEnt models for ", length(valid_species), 
+                                  " species with records in >= ", min_cells, " cells)"))
+        
+        # histogram data
+        h <- r %>%
+                mutate(lyr = plyr::round_any(layer, 25)) %>%
+                group_by(lyr) %>%
+                summarize(n=n())
+        
+        # histogram
+        l <- ggplot(h, aes(lyr, n, fill=lyr)) + 
+                geom_bar(stat="identity", width=25) + 
+                scale_fill_viridis() +
+                theme(panel.background=element_blank(), panel.grid=element_blank(),
+                      axis.text.y=element_blank(), axis.title.y=element_blank(), axis.ticks.y=element_blank(), legend.position="none") +
+                labs(x="number of species")
+        
+        png(paste0(richness_dir, "/richness_min", min_cells, ".png"), width = 1200, height = 1500)
+        plot(p)
+        print(l, 
+              vp=viewport(x = .5, y = .6, 
+                          width = unit(0.4, "npc"), height = unit(0.25, "npc"),
+                          just = c("left", "bottom")))
+        dev.off()
+}
 
-# map
-p <- ggplot(r, aes(x, y, fill=layer)) +
-        geom_raster() +
-        scale_fill_viridis() +
-        coord_fixed(ratio=1) +
-        theme(panel.background=element_blank(), panel.grid=element_blank(),
-              axis.text=element_blank(), axis.title=element_blank(), axis.ticks=element_blank(),
-              legend.position="none", title=element_text(size=25)) +
-        guides(fill = guide_colorbar(barwidth=20)) +
-        labs(title=paste0("PLANT SPECIES RICHNESS\n(MaxEnt models for ", length(valid_species), 
-                          " species with records in >= ", min_cells, " cells)"))
 
-# histogram data
-h <- r %>%
-        mutate(lyr = plyr::round_any(layer, 25)) %>%
-        group_by(lyr) %>%
-        summarize(n=n())
-
-# histogram
-l <- ggplot(h, aes(lyr, n, fill=lyr)) + 
-        geom_bar(stat="identity", width=25) + 
-        scale_fill_viridis() +
-        theme(panel.background=element_blank(), panel.grid=element_blank(),
-              axis.text.y=element_blank(), axis.title.y=element_blank(), axis.ticks.y=element_blank(), legend.position="none") +
-        labs(x="number of species")
-
-png(paste0(richness_dir, "/richness_min", min_cells, ".png"), width = 1000, height = 1500)
-plot(p)
-print(l, 
-      vp=viewport(x = .5, y = .55, 
-                  width = unit(0.45, "npc"), height = unit(0.3, "npc"),
-                  just = c("left", "bottom")))
-dev.off()
 
 
 
@@ -133,7 +148,7 @@ dev.off()
 
 r <- list.files(richness_dir, pattern="richness_810m", full.names=T)
 r <- stack(r)
-png(paste0(richness_dir, "/richness_thresholds_scatterplot.png"), width = 800, height = 800)
+png(paste0(richness_dir, "/richness_thresholds_scatterplot_810m_maxent.png"), width = 800, height = 800)
 pairs(r)
 dev.off()
 
@@ -149,7 +164,7 @@ p <- ggplot(v, aes(x, y, fill=difference)) +
               axis.text=element_blank(), axis.title=element_blank(), axis.ticks=element_blank(),
               legend.position="none", title=element_text(size=25)) +
         guides(fill = guide_colorbar(barwidth=20)) +
-        labs(title="difference in standard scores, min30-min0")
+        labs(title="difference in relative richness,\nno minimum vs 30-cell minimum")
 h <- v %>%
         mutate(lyr = plyr::round_any(difference, .1)) %>%
         group_by(lyr) %>%
@@ -161,11 +176,11 @@ l <- ggplot(h, aes(lyr, n, fill=lyr)) +
               axis.text.y=element_blank(), axis.title.y=element_blank(), axis.ticks.y=element_blank(), legend.position="none") +
         labs(x="z(min30) - z(min0)")
 
-png(paste0(richness_dir, "/richness_difference_30_0.png"), width = 1000, height = 1500)
+png(paste0(richness_dir, "/richness_difference_30_0_810m_maxent.png"), width = 1200, height = 1500)
 plot(p)
 print(l, 
-      vp=viewport(x = .5, y = .55, 
-                  width = unit(0.45, "npc"), height = unit(0.3, "npc"),
+      vp=viewport(x = .5, y = .6, 
+                  width = unit(0.4, "npc"), height = unit(0.25, "npc"),
                   just = c("left", "bottom")))
 dev.off()
 
@@ -203,18 +218,80 @@ stopCluster(cl)
 
 
 ### sum to create richness maps at both resolutions ###
+for(min_cells in c(0,10,30)){
+        freqs <- read.csv(paste0(project_stem_dir, "/git_files/data/species_occurrence_counts.csv"), stringsAsFactors=F)
+        valid_species <- freqs$spp[freqs$ncells >= min_cells]
+        
+        writeRaster(sumRasters(model_dir, "BinaryRangePrediction_25k.rds", valid_species),
+                    paste0(richness_dir, "/richness_25k_min", min_cells, ".tif"), overwrite=T)
+        writeRaster(sumRasters(model_dir, "BinaryRangePrediction_50k.rds", valid_species),
+                    paste0(richness_dir, "/richness_50k_min", min_cells, ".tif"), overwrite=T)
+}
 
-writeRaster(sumRasters(model_dir, "BinaryRangePrediction_25k.rds", valid_species), 
-            paste0(richness_dir, "/richness_25k_min", min_cells, ".tif"), overwrite=T)
-writeRaster(sumRasters(model_dir, "BinaryRangePrediction_50k.rds", valid_species),
-            paste0(richness_dir, "/richness_50k_min", min_cells, ".tif"), overwrite=T)
+
+
+
+### comparison of thresholds 0, 10, 30 in point richness data ###
+
+for(res in c("25", "50")){
+        for(stat in c("raw", "Rarefied")){
+                
+                r <- list.files("C:/Lab_projects/2016_Phylomodelling/Data/Richness/point_richness_rasters", pattern=stat, full.names=T)
+                r <- r[grepl(".grd", r) & grepl(paste0(res, "k"), r)]
+                layers <- basename(r)
+                r <- stack(r)
+                names(r) <- layers
+                
+                # pairs plot
+                png(paste0(richness_dir, "/richness_thresholds_scatterplot_", res, "k_", stat, ".png"), width = 800, height = 800)
+                pairs(r)
+                dev.off()
+                
+                # difference in relative richness, 30 vs 0 thresholds
+                v <- as.data.frame(rasterToPoints(r))
+                v[,3:6] <- apply(v[,3:6], 2, scale)
+                v$difference <- v[,6] - v[,4]
+                p <- ggplot(v, aes(x, y, fill=difference)) +
+                        geom_raster() +
+                        scale_fill_gradient2(min="darkred", mid="gray", high="darkblue", midpoint=0) +
+                        coord_fixed(ratio=1) +
+                        theme(panel.background=element_blank(), panel.grid=element_blank(),
+                              axis.text=element_blank(), axis.title=element_blank(), axis.ticks=element_blank(),
+                              legend.position="none", title=element_text(size=25)) +
+                        guides(fill = guide_colorbar(barwidth=20)) +
+                        labs(title=paste0("difference in relative richness,\nno minimum vs 30-cell minimum\n", res, "k ", stat))
+                binwidth <- range(v$difference, na.rm=T)
+                binwidth <- (binwidth[2]-binwidth[1])/20
+                h <- v %>%
+                        mutate(lyr = plyr::round_any(difference, binwidth)) %>%
+                        group_by(lyr) %>%
+                        summarize(n=n())
+                l <- ggplot(h, aes(lyr, n, fill=lyr)) + 
+                        geom_bar(stat="identity", width=binwidth) + 
+                        scale_fill_gradient2(min="darkred", mid="gray", high="darkblue", midpoint=0) +
+                        theme(panel.background=element_blank(), panel.grid=element_blank(),
+                              axis.text.y=element_blank(), axis.title.y=element_blank(), axis.ticks.y=element_blank(), legend.position="none") +
+                        labs(x="z(min30) - z(min0)")
+                
+                png(paste0(richness_dir, "/richness_difference_30_0_", res, "k_", stat, ".png"), width = 1200, height = 1500)
+                plot(p)
+                print(l, 
+                      vp=viewport(x = .5, y = .6, 
+                                  width = unit(0.4, "npc"), height = unit(0.25, "npc"),
+                                  just = c("left", "bottom")))
+                dev.off()
+                
+        }
+}
+
+
 
 
 ### compare to occurrence density maps ###
 
 for(res in c("25", "50")){
         r <- stack(raster(paste0(richness_dir, "/richness_min", min_cells, "_", res, "k.tif")),
-                     stack(pr_files[grepl(paste0(res, "k"), pr_files)]))
+                   stack(pr_files[grepl(paste0(res, "k"), pr_files)]))
         names(r) <- c("maxent", "rarefied", "raw")
         r <- mask(r, r[[3]])
         #r <- mask(r, calc(r, sum))
@@ -291,12 +368,12 @@ for(res in c("25", "50")){
 cl <- makeCluster(7)
 registerDoParallel(cl)
 r <- foreach(spp = spp_dirs,
-                   .packages=c("raster")) %dopar% {
-                           if(!file.exists(paste0(spp, "/BinaryRangePrediction.rds"))) return("no data")
-                           rasters <- paste0(spp, "/BinaryRangePrediction", c("", "_25k", "_50k"), ".rds")
-                           ranges <- sapply(rasters, function(x) sum(na.omit(values(readRDS(x)))))
-                           return(ranges)
-                   }
+             .packages=c("raster")) %dopar% {
+                     if(!file.exists(paste0(spp, "/BinaryRangePrediction.rds"))) return("no data")
+                     rasters <- paste0(spp, "/BinaryRangePrediction", c("", "_25k", "_50k"), ".rds")
+                     ranges <- sapply(rasters, function(x) sum(na.omit(values(readRDS(x)))))
+                     return(ranges)
+             }
 stopCluster(cl)
 
 good <- sapply(r, length)==3
