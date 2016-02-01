@@ -8,6 +8,12 @@
 library(raster)
 library(dismo)
 library(doParallel)
+library(ggplot2)
+library(viridis)
+library(tidyr)
+library(dplyr)
+library(grid)
+library(gridExtra)
 
 
 ######### file paths ##########
@@ -92,12 +98,7 @@ for(min_cells in c(0,10,30)){ # calculte richness for each of the three threshol
 
 ######### plots #########
 
-library(ggplot2)
-library(viridis)
-library(tidyr)
-library(dplyr)
-library(grid)
-library(gridExtra)
+
 
 for(min_cells in c(0,10,30)){ # create richness maps for each of the three thresholds
         
@@ -361,7 +362,7 @@ for(res in resolutions){
                               axis.text=element_blank(), axis.title=element_blank(), axis.ticks=element_blank(),
                               legend.position="top", title=element_text(size=25), strip.text=element_text(size=25)) +
                         guides(fill = guide_colorbar(barwidth=20)) +
-                        labs(fill="difference from maxent (normalized)  ")
+                        labs(fill="sample minus maxent (normalized)  ")
                 
                 # save combo plot
                 p <- arrangeGrob(textGrob(label=paste0("Species richness: statistics compared (", res, "km, ", "min ", thresh, " cells)"),
@@ -370,7 +371,6 @@ for(res in resolutions){
                 png(paste0(richness_dir, "/richness_comparison_", res, "k_min", thresh, ".png"), width=1000, height=1500)
                 grid.draw(p)
                 dev.off()
-                
                 
                 # difference from maxent as function of raw
                 z <- s %>%
@@ -383,18 +383,17 @@ for(res in resolutions){
                                diff_scaled=value_scaled-maxent_scaled,
                                diff_pmax=value_pmax-maxent_pmax) %>%
                         select(x, y, stat, value, diff_basic:diff_pmax) %>%
-                        gather(diff_stat, diff_value, diff_basic:diff_pmax) %>%
-                        spread(stat, value)
+                        gather(diff_stat, diff_value, diff_basic:diff_pmax)
                         
-                plt <- ggplot(z, aes(raw, diff_value)) + 
+                plt <- ggplot(z, aes(value, diff_value)) + 
                         geom_point() +
                         geom_smooth(se=F) +
-                        facet_grid(diff_stat~., scales="free") +
+                        facet_grid(diff_stat~stat, scales="free") +
                         theme_bw() +
                         theme(legend.position="top") +
-                        labs(x="raw richness", y="",
-                             title=paste0(res, "km, ", "min ", thresh, " cells"))
-                ggsave(paste0(richness_dir, "/error_saturation_scatterplot_", res, "k_min", thresh, ".png"), plt, width=5, height=10, units="in")
+                        labs(x="richness", y="",
+                             title=paste0("sample richness minus maxent richness, ", res, "km, ", "min ", thresh, " cells"))
+                ggsave(paste0(richness_dir, "/error_saturation_scatterplot_", res, "k_min", thresh, ".png"), plt, width=8, height=10, units="in")
         }
 }
 
