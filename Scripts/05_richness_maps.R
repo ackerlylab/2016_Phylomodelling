@@ -63,6 +63,71 @@ results <- foreach(spp = spp_dirs,
 stopCluster(cl)
 table(unlist(results))
 
+
+######## export png maps of binary predictions for each species ###########
+
+# load state border for clipping
+cali <- rgdal::readOGR("C:/Lab_projects/2016_Phylomodelling/Data/Shapefiles/states", "cb_2014_us_state_500k")
+cali <- cali[cali$NAME=="California",]
+prj <- crs(readRDS(paste0(spp_dirs[1], "/BinaryRangePrediction.rds")))
+cali <- spTransform(cali, prj)
+
+# load occurrences
+allocc <- list.files("C:/Lab_projects/2016_Phylomodelling/Data/Species/processed3", full.names=T)
+allocc <- lapply(allocc[3:length(allocc)], readRDS) # the first two files aren't species records
+allocc <- do.call("rbind", allocc)
+allocc <- allocc[!is.na(allocc$longitude + allocc$latitude),]
+coordinates(allocc) <- c("longitude", "latitude")
+projection(allocc) <- '+proj=longlat +ellps=WGS84'
+allocc <- spTransform(allocc, crs(cali))
+
+rangemap <- function(dir){
+        files <- list.files(dir, pattern="BinaryRangePrediction", full.names=T)
+        rds2df <- function(x) as.data.frame(rasterToPoints(mask(readRDS(x), cali)))
+        r <- lapply(files, rds2df)
+        for(i in 1:length(r)) r[[i]]$resolution <- c("810m", "25km", "50km")[i]
+        r <- do.call("rbind", r)
+        names(r)[3] <- "presence"
+        
+        # add point occurrences
+        occ <- allocc[allocc$current_name_binomial==basename(dir),]
+        occ <- as.data.frame(occ)
+        occ$resolution <- "records"
+        occbg <- r[r$resolution=="810m",]
+        occbg$resolution <- "records"
+        occbg$presence <- 0
+        r <- rbind(r, occbg)
+        
+        r$resolution <- factor(r$resolution, levels=c("records", "810m", "25km", "50km"))
+        
+        eb <- ggplot2::element_blank()
+        p <- ggplot() +
+                geom_raster(data=r, aes(x, y, fill=factor(presence))) +
+                geom_point(data=occ, aes(longitude, latitude), 
+                           color="darkred", shape=3, size=3) +
+                scale_fill_manual(values=c("gray80", "darkred")) +
+                facet_wrap(~resolution, nrow=1) +
+                coord_fixed(ratio=1.3) +
+                labs(title=paste0(basename(dir), "\n")) +
+                theme(panel.background=eb, panel.grid=eb, 
+                      axis.text=eb, axis.ticks=eb, axis.title=eb,
+                      strip.background=eb, legend.position="none", 
+                      title=element_text(color="darkred", size=30), 
+                      strip.text=element_text(color="gray70", size=20))
+        ggsave(paste0(dir, "/", basename(dir), " maxent rangemap.png"), 
+               p, width=12, height=9, units="in")
+}
+
+cl <- makeCluster(nodes)
+registerDoParallel(cl)
+results <- foreach(spp = spp_dirs,
+                   .packages=c("raster", "ggplot2")) %dopar% {
+                           rangemap(spp)
+                   }
+stopCluster(cl)
+
+
+
 ######## richness map summed across species ###########
 
 sumRasters <- function(dir, pattern, species){
@@ -96,9 +161,8 @@ for(min_cells in c(0,10,30)){ # calculte richness for each of the three threshol
         writeRaster(richness, paste0(richness_dir, "/richness_810m_min", min_cells, ".tif"), overwrite=T)
 }
 
+
 ######### plots #########
-
-
 
 for(min_cells in c(0,10,30)){ # create richness maps for each of the three thresholds
         
@@ -431,3 +495,7 @@ dev.off()
 png(paste0(richness_dir, "/species_range_scatterplot_loglog.png"), width=1000, height=1000)
 pairs(log10(rd[,2:6]), cex=.1)
 dev.off()
+
+
+
+######### sample richness maps (at three resolutions) ###########
