@@ -128,8 +128,8 @@ results <- foreach(spp = spp_dirs,
 stopCluster(cl)
 
 # consolidate copies of these maps in a single location
-maps <- list.files(basename(spp_dirs[1]), recursive=T, full.names=T, pattern="maxent rangemep")
-newmaps <- paste0("C:/Lab_projects/2016_Phylomodelling/Output/Charts/rangemaps/", basename(newmaps))
+maps <- list.files(dirname(spp_dirs[1]), recursive=T, full.names=T, pattern="maxent rangemap")
+newmaps <- paste0("C:/Lab_projects/2016_Phylomodelling/Output/Charts/rangemaps/", basename(maps))
 file.copy(maps, newmaps)
 
 
