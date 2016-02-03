@@ -109,7 +109,7 @@ rangemap <- function(dir){
                 scale_fill_manual(values=c("gray80", "darkred")) +
                 facet_wrap(~resolution, nrow=1) +
                 coord_fixed(ratio=1.3) +
-                labs(title=paste0(basename(dir), "\n")) +
+                labs(title=paste0(basename(dir), "/n")) +
                 theme(panel.background=eb, panel.grid=eb, 
                       axis.text=eb, axis.ticks=eb, axis.title=eb,
                       strip.background=eb, legend.position="none", 
@@ -126,6 +126,11 @@ results <- foreach(spp = spp_dirs,
                            rangemap(spp)
                    }
 stopCluster(cl)
+
+# consolidate copies of these maps in a single location
+maps <- list.files(basename(spp_dirs[1]), recursive=T, full.names=T, pattern="maxent rangemep")
+newmaps <- paste0("C:/Lab_projects/2016_Phylomodelling/Output/Charts/rangemaps/", basename(newmaps))
+file.copy(maps, newmaps)
 
 
 
