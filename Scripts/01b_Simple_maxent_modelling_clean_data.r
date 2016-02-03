@@ -17,8 +17,9 @@ start=Sys.time()
 cdir <- filled_climate_data_dir
 spdir <- occurrence_data_dir_processed
 odir <- maxent_output_dir
-species_list <- paste0(spdir, '/0_Species_list_v2.rdata')
-maxent_background <- paste(spdir, '10000_CA_plants_bg_810m.rdata', sep='')
+species_list <- paste0(spdir, 'combined/0_Species_list_v2.rdata')
+#maxent_background <- paste(spdir, '10000_CA_plants_bg_810m.rdata', sep='')
+maxent_background <- paste(spdir, 'combined/10000_CA_plants_bg_810m_occbias.rdata', sep='')
 
 
 #----------------#
@@ -70,34 +71,33 @@ cl <- makeCluster(no.nodes)
 registerDoParallel(cl)
 
 results <- foreach(i=1:length(allSpecies)) %dopar% {
-  #for (i in 1:length(allSpecies)) {
-  options(java.parameters = "-Xmx1g" )
-  require(dismo)
-  require(rJava)
-  require(raster) 
-  
-  mySpecies <- allSpecies[i]
-  print(mySpecies)
-  Sys.time()
-  
-  # Read in species occurrence data and background
-  pres <- readRDS(paste0(spdir, mySpecies, ".rdata"))
-  coordinates(pres) <- ~longitude + latitude
-  projection(pres) <- CRS(orig.project)
-  occur <- spTransform(pres, projection(predictors))
-  
-  # Directory to write files to
-  mx.dir = paste(odir, version, mySpecies, sep="/")
-  if(file.exists(mx.dir) == F) {dir.create(mx.dir, recursive=T)}
-  
-  # Drop occurrences that fall in the water
-  valid <- !is.na(extract(predictors[[1]], occur))
-  occur <- occur[valid,]
-  
-  # Run the model!
-  mx <- try(maxent(predictors, p=occur, a=bg ,progress='text', path=mx.dir, args=mxArgs))
-  saveRDS(mx, file = paste(mx.dir, 'ModelObject.rdata', sep='/'))
-  
+        #for (i in 1:length(allSpecies)) {
+        options(java.parameters = "-Xmx1g" )
+        require(dismo)
+        require(rJava)
+        require(raster) 
+        
+        mySpecies <- allSpecies[i]
+        print(mySpecies)
+        Sys.time()
+        
+        # Read in species occurrence data and background
+        pres <- readRDS(paste0(spdir, "/atomic/", mySpecies, ".rdata"))
+        coordinates(pres) <- ~longitude + latitude
+        projection(pres) <- CRS(orig.project)
+        occur <- spTransform(pres, projection(predictors))
+        
+        # Directory to write files to
+        mx.dir <- paste(odir, version, mySpecies, sep="/")
+        if(file.exists(mx.dir) == F) {dir.create(mx.dir, recursive=T)}
+        
+        # Drop occurrences that fall in the water
+        valid <- !is.na(extract(predictors[[1]], occur))
+        occur <- occur[valid,]
+        
+        # Run the model!
+        mx <- try(maxent(predictors, p=occur, a=bg ,progress='text', path=mx.dir, args=mxArgs))
+        saveRDS(mx, file = paste(mx.dir, 'ModelObject.rdata', sep='/'))
 }
 
 stopCluster(cl)
