@@ -73,8 +73,8 @@ prj <- crs(readRDS(paste0(spp_dirs[1], "/BinaryRangePrediction.rds")))
 cali <- spTransform(cali, prj)
 
 # load occurrences
-allocc <- list.files("C:/Lab_projects/2016_Phylomodelling/Data/Species/processed3", full.names=T)
-allocc <- lapply(allocc[3:length(allocc)], readRDS) # the first two files aren't species records
+allocc <- list.files("C:/Lab_projects/2016_Phylomodelling/Data/Species/processed3/atomic", full.names=T)
+allocc <- lapply(allocc, readRDS)
 allocc <- do.call("rbind", allocc)
 allocc <- allocc[!is.na(allocc$longitude + allocc$latitude),]
 coordinates(allocc) <- c("longitude", "latitude")
@@ -83,6 +83,7 @@ allocc <- spTransform(allocc, crs(cali))
 
 rangemap <- function(dir){
         files <- list.files(dir, pattern="BinaryRangePrediction", full.names=T)
+        if(length(files)==0) return("no maxent prediction")
         rds2df <- function(x) as.data.frame(rasterToPoints(mask(readRDS(x), cali)))
         r <- lapply(files, rds2df)
         for(i in 1:length(r)) r[[i]]$resolution <- c("810m", "25km", "50km")[i]
