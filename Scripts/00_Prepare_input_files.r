@@ -13,7 +13,7 @@ wdir <- project_stem_dir
 cdir <- climate_data_dir
 
 spdir <- paste(wdir, '/Data/Species/', sep='')
-outspdir <- paste(wdir, 'Data/Species/Processed3/',sep='')
+outspdir <- paste(wdir, 'Data/Species/Processed3/',sep='/')
 
 #----------------#
 # Load libraries #
@@ -218,6 +218,32 @@ bg <- sample(notna,10000)
 #saveRDS(bg, file=paste(outspdir,'10000_CA_plants_bg.rdata',sep=''))
 #saveRDS(bg, file=paste(outspdir,'10000_CA_plants_bg_1080m.rdata',sep=''))
 saveRDS(bg, file=paste(outspdir,'10000_CA_plants_bg_810m.rdata',sep=''))
+
+
+########## alternative method: sample background points to match occurrence locality distribution #########
+
+# load climate data (used to eliminate water occurrences)
+climfiles <- list.files(path=cdir, pattern='data', full.names=T)
+climfiles <- env.files[grepl(paste(paste0(climnames, "_filled"), collapse="|"), env.files)]
+library(raster)
+climrast <- do.call("stack", lapply(climfiles, readRDS))
+climrast <- sum(climrast)
+
+# load occurrences
+allocc <- list.files("C:/Lab_projects/2016_Phylomodelling/Data/Species/processed3/atomic", full.names=T)
+allocc <- lapply(allocc, readRDS)
+allocc <- do.call("rbind", allocc)
+allocc <- allocc[!is.na(allocc$longitude + allocc$latitude),]
+coordinates(allocc) <- c("longitude", "latitude")
+projection(allocc) <- '+proj=longlat +ellps=WGS84'
+allocc <- spTransform(allocc, crs(climrast))
+
+# sample 10k records for background, export result
+bg <- allocc[!is.na(extract(climrast, allocc)),]
+set.seed(123)
+bg <- landocc[sample(length(bg), 10000),]
+saveRDS(bg, file=paste(outspdir,'10000_CA_plants_bg_810m_occbias.rdata',sep=''))
+
 
 
 #---------------------------#
