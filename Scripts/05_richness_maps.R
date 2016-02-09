@@ -20,8 +20,8 @@ library(gridExtra)
 # source user_parameters.r before running #
 
 clim_dir <- filled_climate_data_dir
-model_dir <- paste0(project_stem_dir, "/Output/Maxent/v4")
-richness_dir <- paste0(project_stem_dir, "/Output/Richness")
+model_dir <- paste0(project_stem_dir, "/Output/Maxent/v5")
+richness_dir <- paste0(project_stem_dir, "/Output/Richness/V5")
 pr_dir <- paste0(project_stem_dir, "/Data/Richness/point_richness_rasters")
 
 
@@ -64,75 +64,6 @@ stopCluster(cl)
 table(unlist(results))
 
 
-######## export png maps of binary predictions for each species ###########
-
-# load state border for clipping
-cali <- rgdal::readOGR("C:/Lab_projects/2016_Phylomodelling/Data/Shapefiles/states", "cb_2014_us_state_500k")
-cali <- cali[cali$NAME=="California",]
-prj <- crs(readRDS(paste0(spp_dirs[1], "/BinaryRangePrediction.rds")))
-cali <- spTransform(cali, prj)
-
-# load occurrences
-allocc <- list.files("C:/Lab_projects/2016_Phylomodelling/Data/Species/processed3/atomic", full.names=T)
-allocc <- lapply(allocc, readRDS)
-allocc <- do.call("rbind", allocc)
-allocc <- allocc[!is.na(allocc$longitude + allocc$latitude),]
-coordinates(allocc) <- c("longitude", "latitude")
-projection(allocc) <- '+proj=longlat +ellps=WGS84'
-allocc <- spTransform(allocc, crs(cali))
-
-rangemap <- function(dir){
-        files <- list.files(dir, pattern="BinaryRangePrediction", full.names=T)
-        if(length(files)==0) return("no maxent prediction")
-        rds2df <- function(x) as.data.frame(rasterToPoints(mask(readRDS(x), cali)))
-        r <- lapply(files, rds2df)
-        for(i in 1:length(r)) r[[i]]$resolution <- c("810m", "25km", "50km")[i]
-        r <- do.call("rbind", r)
-        names(r)[3] <- "presence"
-        
-        # add point occurrences
-        occ <- allocc[allocc$current_name_binomial==basename(dir),]
-        occ <- as.data.frame(occ)
-        occ$resolution <- "records"
-        occbg <- r[r$resolution=="810m",]
-        occbg$resolution <- "records"
-        occbg$presence <- 0
-        r <- rbind(r, occbg)
-        
-        r$resolution <- factor(r$resolution, levels=c("records", "810m", "25km", "50km"))
-        
-        eb <- ggplot2::element_blank()
-        p <- ggplot() +
-                geom_raster(data=r, aes(x, y, fill=factor(presence))) +
-                geom_point(data=occ, aes(longitude, latitude), 
-                           color="darkred", shape=3, size=3) +
-                scale_fill_manual(values=c("gray80", "darkred")) +
-                facet_wrap(~resolution, nrow=1) +
-                coord_fixed(ratio=1.3) +
-                labs(title=paste0(basename(dir), "/n")) +
-                theme(panel.background=eb, panel.grid=eb, 
-                      axis.text=eb, axis.ticks=eb, axis.title=eb,
-                      strip.background=eb, legend.position="none", 
-                      title=element_text(color="darkred", size=30), 
-                      strip.text=element_text(color="gray70", size=20))
-        ggsave(paste0(dir, "/", basename(dir), " maxent rangemap.png"), 
-               p, width=12, height=9, units="in")
-}
-
-cl <- makeCluster(nodes)
-registerDoParallel(cl)
-results <- foreach(spp = spp_dirs,
-                   .packages=c("raster", "ggplot2")) %dopar% {
-                           rangemap(spp)
-                   }
-stopCluster(cl)
-
-# consolidate copies of these maps in a single location
-maps <- list.files(dirname(spp_dirs[1]), recursive=T, full.names=T, pattern="maxent rangemap")
-newmaps <- paste0("C:/Lab_projects/2016_Phylomodelling/Output/Charts/rangemaps/", basename(maps))
-file.copy(maps, newmaps)
-
-
 
 ######## richness map summed across species ###########
 
@@ -170,7 +101,10 @@ for(min_cells in c(0,10,30)){ # calculte richness for each of the three threshol
 
 ######### plots #########
 
+freqs <- read.csv(paste0(project_stem_dir, "/git_files/data/species_occurrence_counts.csv"), stringsAsFactors=F)
 for(min_cells in c(0,10,30)){ # create richness maps for each of the three thresholds
+        
+        valid_species <- freqs$spp[freqs$ncells >= min_cells]
         
         richness <- raster(paste0(richness_dir, "/richness_810m_min", min_cells, ".tif"))
         r <- as.data.frame(rasterToPoints(richness))
@@ -243,7 +177,7 @@ results <- foreach(spp = paste0(spp_dirs, "/BinaryRangePrediction.rds"),
 stopCluster(cl)
 
 
-### sum to create richness maps at both resolutions ###
+### sum to create richness rasters at both resolutions ###
 for(min_cells in c(0,10,30)){
         freqs <- read.csv(paste0(project_stem_dir, "/git_files/data/species_occurrence_counts.csv"), stringsAsFactors=F)
         valid_species <- freqs$spp[freqs$ncells >= min_cells]
@@ -504,4 +438,74 @@ dev.off()
 
 
 
-######### sample richness maps (at three resolutions) ###########
+
+
+######## export png range maps for each species ###########
+
+# load state border for clipping
+cali <- rgdal::readOGR("C:/Lab_projects/2016_Phylomodelling/Data/Shapefiles/states", "cb_2014_us_state_500k")
+cali <- cali[cali$NAME=="California",]
+prj <- crs(readRDS(paste0(spp_dirs[1], "/BinaryRangePrediction.rds")))
+cali <- spTransform(cali, prj)
+
+# load occurrences
+allocc <- list.files("C:/Lab_projects/2016_Phylomodelling/Data/Species/processed3/atomic", full.names=T)
+allocc <- lapply(allocc, readRDS)
+allocc <- do.call("rbind", allocc)
+allocc <- allocc[!is.na(allocc$longitude + allocc$latitude),]
+coordinates(allocc) <- c("longitude", "latitude")
+projection(allocc) <- '+proj=longlat +ellps=WGS84'
+allocc <- spTransform(allocc, crs(cali))
+
+rangemap <- function(dir){
+        files <- list.files(dir, pattern="BinaryRangePrediction", full.names=T)
+        if(length(files)==0) return("no maxent prediction")
+        rds2df <- function(x) as.data.frame(rasterToPoints(mask(readRDS(x), cali)))
+        r <- lapply(files, rds2df)
+        for(i in 1:length(r)) r[[i]]$resolution <- c("810m", "25km", "50km")[i]
+        r <- do.call("rbind", r)
+        names(r)[3] <- "presence"
+        
+        # add point occurrences
+        occ <- allocc[allocc$current_name_binomial==basename(dir),]
+        occ <- as.data.frame(occ)
+        occ$resolution <- "records"
+        occbg <- r[r$resolution=="810m",]
+        occbg$resolution <- "records"
+        occbg$presence <- 0
+        r <- rbind(r, occbg)
+        
+        r$resolution <- factor(r$resolution, levels=c("records", "810m", "25km", "50km"))
+        
+        eb <- ggplot2::element_blank()
+        p <- ggplot() +
+                geom_raster(data=r, aes(x, y, fill=factor(presence))) +
+                geom_point(data=occ, aes(longitude, latitude), 
+                           color="darkred", shape=3, size=3) +
+                scale_fill_manual(values=c("gray80", "darkred")) +
+                facet_wrap(~resolution, nrow=1) +
+                coord_fixed(ratio=1.3) +
+                labs(title=paste0(basename(dir), "/n")) +
+                theme(panel.background=eb, panel.grid=eb, 
+                      axis.text=eb, axis.ticks=eb, axis.title=eb,
+                      strip.background=eb, legend.position="none", 
+                      title=element_text(color="darkred", size=30), 
+                      strip.text=element_text(color="gray70", size=20))
+        ggsave(paste0(dir, "/", basename(dir), " maxent rangemap.png"), 
+               p, width=12, height=9, units="in")
+}
+
+cl <- makeCluster(nodes)
+registerDoParallel(cl)
+results <- foreach(spp = spp_dirs,
+                   .packages=c("raster", "ggplot2")) %dopar% {
+                           rangemap(spp)
+                   }
+stopCluster(cl)
+
+# consolidate copies of these maps in a single location
+maps <- list.files(dirname(spp_dirs[1]), recursive=T, full.names=T, pattern="maxent rangemap")
+newmaps <- paste0("C:/Lab_projects/2016_Phylomodelling/Output/Charts/rangemaps/", basename(maps))
+file.copy(maps, newmaps)
+
+
