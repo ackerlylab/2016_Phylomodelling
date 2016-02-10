@@ -84,25 +84,19 @@ cali_histogram_map <- function(data, varname, title, outfile, trans="linear"){
         
 }
 
-cali_histogram_map(i, varname="log10(records per cell)", title="CCH sampling intensity (810m)", trans="log10",
+cali_histogram_map(i, varname="log10(records per cell)", title="Sampling intensity (810m)", trans="log10",
               outfile="C:/Lab_projects/2016_Phylomodelling/Output/Sampling/sampling.png")
 
 
 
 
-############# environmental space ##################
+#### environmental space
 
 # load climate data
 cdir <- filled_climate_data_dir
 files <- list.files(path=cdir, pattern='810m_filled3x', full.names=T)
 climnames <- sort(c("cwd","djf","jja","ppt")) #use sort to ensure correct names used for predictors
 s <- stack(lapply(files, readRDS))
-
-# clip climate data to CA boundary
-cali <- rgdal::readOGR("C:/Lab_projects/2016_Phylomodelling/Data/Shapefiles/states", "cb_2014_us_state_500k")
-cali <- cali[cali$NAME=="California",]
-cali <- spTransform(cali, crs(s))
-s <- mask(s, cali)
 
 # combine sampling and climate data
 s <- stack(s, intensity)
@@ -120,7 +114,7 @@ d$jja <- scale(d$jja)
 pc <- prcomp(d[,climnames])
 d$pc1 <- pc$x[,1]
 d$pc2 <- pc$x[,2]
-ddd <- d
+
 
 ### three sampling methods:
 
@@ -140,41 +134,29 @@ d3$scheme <- "samples"
 d <- rbind(d1, d2, d3)
 
 
-### pc biplot ###
-
-png("C:/Lab_projects/2016_Phylomodelling/Output/Sampling/pc_biplot.png", width = 600, height = 600)
-biplot(pc)
-dev.off()
 
 
 ### pc colormap ###
 
 library(colormap)
-#dc <- d[d$scheme=="all cells",]
-#dc <- dc[sample(nrow(dc), 10000),]
-cols <- colors2d(as.matrix(ddd[,c("pc1", "pc2")]))
+dc <- d[d$scheme=="all cells",]
+cols <- colorwheel2d(dc[,c("pc1", "pc2")])
 
-p <- ggplot() +
-        geom_raster(data=ddd, aes(x, y), fill=cols) +
+p <- ggplot(dc, aes(x, y)) +
+        geom_raster(fill=cols) +
         coord_fixed(ratio=1) +
         theme(panel.background=element_blank(), panel.grid=element_blank(),
               axis.text=element_blank(), axis.title=element_blank(), axis.ticks=element_blank(),
               legend.position="none", title=element_text(size=25)) +
-        labs(title="California climate")
+        labs(title=title)
 
-l <- ggplot() +
-        geom_point(data=ddd, aes(pc1, pc2), color=cols) +
-        theme(panel.background=element_blank(), panel.grid=element_blank(),
-              #axis.text=element_blank(), axis.title=element_blank(), axis.ticks=element_blank(),
-              legend.position="none", title=element_text(size=25))
-
-png("C:/Lab_projects/2016_Phylomodelling/Output/Sampling/pc_map.png", width = 1200, height = 1500)
+png(outfile, width = 1200, height = 1500)
 plot(p)
-print(l, 
-      vp=viewport(x = .5, y = .6, 
-                  width = unit(0.4, "npc"), height = unit(0.3, "npc"),
-                  just = c("left", "bottom")))
 dev.off()
+
+
+
+
 
 
 ### heatmap ###
@@ -187,41 +169,6 @@ p <- ggplot(d, aes(pc1, pc2)) +
         theme(legend.position="top", panel.grid=element_blank()) +
         labs(fill="frequency", title="CCH sampling effort in environmental space")
 ggsave("C:/Lab_projects/2016_Phylomodelling/Output/Sampling/env_heatmap.png", p, width=12, height=6, units="in")
-
-
-
-### difference heatmap ###
-
-library(MASS)
-lims <- c(range(d$pc1), range(d$pc2))
-k1 <- kde2d(d$pc1[d$scheme=="all cells"], d$pc2[d$scheme=="all cells"], lims=lims, n=100)
-k2 <- kde2d(d$pc1[d$scheme=="cells with samples"], d$pc2[d$scheme=="cells with samples"], lims=lims, n=100)
-k3 <- kde2d(d$pc1[d$scheme=="samples"], d$pc2[d$scheme=="samples"], lims=lims, n=100)
-
-flatten <- function(f){
-        df <- as.data.frame(f$z)
-        names(df) <- paste0("y", f$y)
-        df$x <- f$x
-        df <- tidyr::gather(df, y, z, -x)
-        df$y <- as.numeric(sub("y", "", df$y))
-        df
-}
-
-k1 <- flatten(k1)
-k2 <- flatten(k2)
-k3 <- flatten(k3)
-
-k3$diff <- (k3$z - k1$z)
-p <- ggplot(k1, aes(x, y, fill=diff)) + 
-        geom_raster() + 
-        scale_fill_gradient2(high="green", mid="black", low="red", midpoint=0) +
-        #scale_fill_gradient(high="yellow", low="black") +
-        theme_minimal() +
-        theme(legend.position="top", panel.grid=element_blank()) +
-        labs(fill="sample density minus true density", 
-             title="CCH sampling bias in environmental space",
-             x="pc1", y="pc2")
-ggsave("C:/Lab_projects/2016_Phylomodelling/Output/Sampling/env_heatmap_bias.png", p, width=6, height=7, units="in")
 
 
 

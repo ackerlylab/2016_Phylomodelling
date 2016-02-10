@@ -4,9 +4,8 @@
 
 # directories
 project_stem_dir <- "C:/Lab_projects/2016_Phylomodelling"
-climate_data_dir <- "E:/BCM/CA_2014/Summary/HST/Normals_30years"
+climate_data_dir <- paste0(project_stem_dir,"Data/Climate/BCM_normals/Normals_30years")
 filled_climate_data_dir <- "C:/Lab_projects/2016_Phylomodelling/Data/Climate/BCM_normals"
-#occurrence_data_dir <- "E:/Phylo_modelling/Data/Species"
 occurrence_data_dir <- paste0(project_stem_dir, "/Data/Species")
 occurrence_data_dir_processed <- paste0(occurrence_data_dir, '/Processed3/')
 maxent_output_dir <- "C:/Lab_projects/2016_Phylomodelling/Output/Maxent/"
@@ -17,7 +16,7 @@ maxent_output_dir <- "C:/Lab_projects/2016_Phylomodelling/Output/Maxent/"
 nodes <- 6
 
 # Version of maxent run
-maxent_run_version <- "V4"
+maxent_run_version <- "V5"
 
 # species list file name
 #species_list <- paste0(spdir, '/0_Species_list_v2.rdata')

@@ -1,4 +1,4 @@
 *.Rproj
 cchdata
 .Rproj.user
-user_parameters.r
+*user_parameters*
