@@ -457,10 +457,13 @@ coordinates(allocc) <- c("longitude", "latitude")
 projection(allocc) <- '+proj=longlat +ellps=WGS84'
 allocc <- spTransform(allocc, crs(cali))
 
+# and buffer polygons
+buffs <- list.files("C:/Lab_projects/2016_Phylomodelling/Output/Range_polygons/occurrence_buffers", full.names=T)
+
 rangemap <- function(dir){
         files <- list.files(dir, pattern="BinaryRangePrediction", full.names=T)
         if(length(files)==0) return("no maxent prediction")
-        rds2df <- function(x) as.data.frame(rasterToPoints(mask(readRDS(x), cali)))
+        rds2df <- function(x) as.data.frame(rasterToPoints(mask(readRDS(x), cali))) ##### this needs to change. ###
         r <- lapply(files, rds2df)
         for(i in 1:length(r)) r[[i]]$resolution <- c("810m", "25km", "50km")[i]
         r <- do.call("rbind", r)
@@ -474,18 +477,28 @@ rangemap <- function(dir){
         occbg$resolution <- "records"
         occbg$presence <- 0
         r <- rbind(r, occbg)
-        
         r$resolution <- factor(r$resolution, levels=c("records", "810m", "25km", "50km"))
+        
+        # add occurrence buffer
+        buff <- buffs[sub("\\.rds", "", basename(buffs))==basename(dir)]
+        buff <- readRDS(buff)
+        buff <- spTransform(buff, crs(cali))
+        buff <- gIntersection(buff, cali)
+        buff <- fortify(buff)
+        buff$resolution <- "810m"
         
         eb <- ggplot2::element_blank()
         p <- ggplot() +
                 geom_raster(data=r, aes(x, y, fill=factor(presence))) +
                 geom_point(data=occ, aes(longitude, latitude), 
                            color="darkred", shape=3, size=3) +
+                geom_polygon(data=buff, aes(long, lat, group=group, order=order), 
+                             color=NA, fill="yellow", alpha=.5) +
+                #color="black", fill="black", alpha=.25, size=.5) +
                 scale_fill_manual(values=c("gray80", "darkred")) +
                 facet_wrap(~resolution, nrow=1) +
                 coord_fixed(ratio=1.3) +
-                labs(title=paste0(basename(dir), "/n")) +
+                labs(title=paste0(basename(dir), "\n")) +
                 theme(panel.background=eb, panel.grid=eb, 
                       axis.text=eb, axis.ticks=eb, axis.title=eb,
                       strip.background=eb, legend.position="none", 
@@ -498,7 +511,7 @@ rangemap <- function(dir){
 cl <- makeCluster(nodes)
 registerDoParallel(cl)
 results <- foreach(spp = spp_dirs,
-                   .packages=c("raster", "ggplot2")) %dopar% {
+                   .packages=c("raster", "ggplot2", "rgeos", "sp")) %dopar% {
                            rangemap(spp)
                    }
 stopCluster(cl)
