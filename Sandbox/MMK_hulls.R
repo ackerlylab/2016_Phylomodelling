@@ -5,6 +5,10 @@ library(doParallel)
 library(rgeos)
 library(dplyr)
 
+
+outdir <- paste0(project_stem_dir, "/Output/Range_polygons")
+
+
 # get CRS
 proj <- crs(raster("C:/Lab_projects/2016_Phylomodelling/Output/Richness/V5/richness_810m_min0.tif"))
 
@@ -18,81 +22,104 @@ projection(allocc) <- '+proj=longlat +ellps=WGS84'
 allocc <- spTransform(allocc, proj)
 
 # clip occurrences to california boundary
+######### IS THIS A MISTAKE? SHOULD WE INCLUDE COASTAL OCCURRENCES THAT ARE WITHIN THE RASTER FILL AREA? ############
 cali <- rgdal::readOGR("C:/Lab_projects/2016_Phylomodelling/Data/Shapefiles/states", "cb_2014_us_state_500k")
 cali <- cali[cali$NAME=="California",]
 cali <- spTransform(cali, proj)
 ao <- over(allocc, cali)
 allocc <- allocc[!is.na(ao$GEOID),]
-
-# load table of maxent range sizes
-ranges <- read.csv(paste0(project_stem_dir, "/git_files/data/species_occurrence_counts.csv"))
-
 species <- unique(allocc$current_name_binomial)
 
-
-cl <- makeCluster(7)
+# get clipped convex hull sizes for every species
+cl <- makeCluster(nodes)
 registerDoParallel(cl)
 r <- foreach(spp = species,
              .packages=c("sp", "rgeos")) %dopar% {
-                     
-                     # compute geospatial convex hull and clip to coastline
                      s <- allocc[allocc$current_name_binomial==spp,]
                      h <- gConvexHull(s)
                      h <- gIntersection(h, cali)
-                     
                      ha <- gArea(h)
-                     #ma <- ranges$maxent810[ranges$spp==spp]
-                     #distance <- ha / ma
-                     
                      return(ha)
              }
 stopCluster(cl)
 
-r <- rr$hull
-r <- data.frame(spp=species, hull=r)
-r <- full_join(r, ranges)
-r$hull_norm <- scales::rescale(r$hull)
-r$mx_norm <- scales::rescale(r$maxent810m)
 
-ggplot(r, aes(hull_norm, mx_norm, color=log10(hull_norm/mx_norm))) +
-        geom_point() +
-        geom_abline() +
-        scale_x_log10() + 
-        scale_y_log10() + 
-        scale_color_viridis()
+# add hull areas to existing table of species range characteristics
+r <- data.frame(spp=species, hull=unlist(r))
+r <- full_join(read.csv(paste0(project_stem_dir, "/git_files/data/species_occurrence_counts.csv")), r)
 
-r$ratio <- sqrt(sqrt(r$hull/r$maxent810m))
+# ratio of hull to maxent area will determine buffer distance
+r$ratio <- r$hull/r$maxent810m
 hist(r$ratio)
 
-rng <- range(r$ratio[is.finite(r$ratio)])
+# double square root transformation seems best for these ratios, based on some limited experimentation
+trans <- function(x) sqrt(sqrt(x))
+hist(trans(r$ratio))
 
-
-buffer_distance <- function(hull_area, maxent_area, limits=c(10, 50)){
-        sqrt(sqrt(log10(ha/ma))) / rng[2] * (buff_lims[2] - buff_lims[1]) + buff_lims[1]
+# function to calculte buffer distance (in km)
+buffer_distance <- function(hull_area, maxent_area, max_ratio, limits=c(10, 50), trans=NULL){
+        fx <- function(x) x
+        if(!is.null(trans)) fx <- trans
+        ratio <- hull_area/maxent_area
+        if(!is.finite(ratio)) ratio <- max_ratio
+        if(ratio > max_ratio) ratio <- max_ratio
+        dist <- fx(ratio) / fx(max_ratio) * (limits[2] - limits[1]) + limits[1]
+        return(dist)
 }
 
+# check that buffer ratios are nicely distributed
+buffs <- apply(r[,c("hull", "maxent810m")], 1, 
+               function(x){buffer_distance(hull_area=x[1], maxent_area=x[2], 
+                                           max_ratio=max(na.omit(r$ratio)), trans=trans)})
+hist(buffs)
 
-# buffer limits, in km
 
-
-cl <- makeCluster(7)
+# generate and save hulls and buffers for each species
+cl <- makeCluster(nodes)
 registerDoParallel(cl)
-r <- foreach(spp = species,
+md <- foreach(spp = species,
              .packages=c("sp", "rgeos")) %dopar% {
                      
-                     # compute geospatial convex hull and clip to coastline
+                     # geospatial convex hull, clipped to coastline
                      s <- allocc[allocc$current_name_binomial==spp,]
                      h <- gConvexHull(s)
                      h <- gIntersection(h, cali)
                      
+                     # areas of hull and maxent
                      ha <- gArea(h)
-                     ma <- ranges$maxent810[ranges$spp==spp]
+                     ma <- ranges$maxent810[r$spp==spp]
+                     if(is.na(ma)) return(data.frame(spp=spp, hull_area=NA, hull_maxent_ratio=NA, buffer_area=NA, buffer_distance=NA))
                      
-                     # compute buffer distance based on hull/maxent ratio
-                     dist <- 
-                     dist <- dist
+                     # buffer (calculate distance, convert to m)
+                     dist <- buffer_distance(ha, ma, max(na.omit(r$ratio)), trans=trans) * 1000
+                     b <- gBuffer(s, width=dist, byid=F)
+                     ba <- gArea(b)
                      
-                     bp <- gBuffer(s, dist)
-                     return(ha)
+                     # save hull and buffer
+                     saveRDS(h, paste0(outdir, "/convex_hulls/", spp, ".rds"))
+                     saveRDS(b, paste0(outdir, "/occurrence_buffers/", spp, ".rds"))
+                     
+                     # return some metadata (all values in meters)
+                     return(data.frame(spp=spp, hull_area=ha, hull_maxent_ratio=ha/ma, buffer_area=ba, buffer_distance=dist))
              }
 stopCluster(cl)
+
+
+# add metatadata to master table and save
+#mdd <- lapply(md, as.numeric)
+mdd <- do.call("rbind", md)
+r <- full_join(r, mdd)
+#write.csv(r, paste0(project_stem_dir, "/git_files/data/species_occurrence_counts.csv"))
+
+
+
+#ggplot(r, aes(hull, maxent810m, color=trans(hull_norm/mx_norm))) +
+#        geom_point() +
+#        geom_abline() +
+#        scale_x_log10() + 
+#        scale_y_log10() + 
+#        scale_color_viridis()
+
+
+
+
