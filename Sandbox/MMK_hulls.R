@@ -1,11 +1,12 @@
 
 
-library(raster)
 library(doParallel)
 library(rgeos)
 library(dplyr)
+library(raster)
 
 
+cdir <- filled_climate_data_dir
 outdir <- paste0(project_stem_dir, "/Output/Range_polygons")
 
 
@@ -21,14 +22,17 @@ coordinates(allocc) <- c("longitude", "latitude")
 projection(allocc) <- '+proj=longlat +ellps=WGS84'
 allocc <- spTransform(allocc, proj)
 
-# clip occurrences to california boundary
-######### IS THIS A MISTAKE? SHOULD WE INCLUDE COASTAL OCCURRENCES THAT ARE WITHIN THE RASTER FILL AREA? ############
+# exclude occurrences with no climate data
+clim <- readRDS(list.files(cdir, pattern="cwd_", full.names=T))
+allocc <- allocc[!is.na(raster::extract(clim, allocc)),]
+species <- unique(allocc$current_name_binomial)
+
+# load california boundary, to intersect with hulls
 cali <- rgdal::readOGR("C:/Lab_projects/2016_Phylomodelling/Data/Shapefiles/states", "cb_2014_us_state_500k")
 cali <- cali[cali$NAME=="California",]
 cali <- spTransform(cali, proj)
-ao <- over(allocc, cali)
-allocc <- allocc[!is.na(ao$GEOID),]
-species <- unique(allocc$current_name_binomial)
+
+
 
 # get clipped convex hull sizes for every species
 cl <- makeCluster(nodes)
@@ -38,11 +42,11 @@ r <- foreach(spp = species,
                      s <- allocc[allocc$current_name_binomial==spp,]
                      h <- gConvexHull(s)
                      h <- gIntersection(h, cali)
+                     if(is.null(h)) return(NA)
                      ha <- gArea(h)
                      return(ha)
              }
 stopCluster(cl)
-
 
 # add hull areas to existing table of species range characteristics
 r <- data.frame(spp=species, hull=unlist(r))
