@@ -55,7 +55,7 @@ buffs <- list.files(paste0(project_stem_dir, "/Output/Range_polygons/occurrence_
 
 cl <- makeCluster(nodes)
 registerDoParallel(cl)
-results <- foreach(spp = spp_dirs,
+results <- foreach(spp = spp_dirs[1394:length(spp_dirs)],
                    .packages=c("raster", "dismo")) %dopar% {
                            
                            m <- readRDS(paste0(spp, "/ModelObject.rdata"))
@@ -70,6 +70,7 @@ results <- foreach(spp = spp_dirs,
                            
                            # save a version clipped to point buffer
                            buff <- buffs[sub("\\.rds", "", basename(buffs)) == basename(spp)]
+                           if(length(buff)==0) return("no buffer shapefile")
                            buff <- readRDS(buff)
                            bp <- mask(bp, buff)
                            saveRDS(bp, paste0(spp, "/BufferClippedMaxent.rds"))
@@ -105,12 +106,6 @@ for(min_cells in c(0,10,30)){ # calculte richness for each of the three threshol
         
         # compute richness
         richness <- sumRasters(model_dir, "BinaryRangePrediction.rds", valid_species)
-        
-        # clip to state border
-        cali <- rgdal::readOGR("C:/Lab_projects/2016_Phylomodelling/Data/Shapefiles/states", "cb_2014_us_state_500k")
-        cali <- cali[cali$NAME=="California",]
-        cali <- spTransform(cali, crs(richness))
-        richness <- mask(richness, cali)
         
         # save raster file
         writeRaster(richness, paste0(richness_dir, "/richness_810m_min", min_cells, ".tif"), overwrite=T)
@@ -460,11 +455,8 @@ dev.off()
 
 ######## export png range maps for each species ###########
 
-# load state border for clipping
-cali <- rgdal::readOGR("C:/Lab_projects/2016_Phylomodelling/Data/Shapefiles/states", "cb_2014_us_state_500k")
-cali <- cali[cali$NAME=="California",]
+# get correct projection
 prj <- crs(readRDS(paste0(spp_dirs[1], "/BinaryRangePrediction.rds")))
-cali <- spTransform(cali, prj)
 
 # load occurrences
 allocc <- list.files("C:/Lab_projects/2016_Phylomodelling/Data/Species/processed3/atomic", full.names=T)
@@ -473,7 +465,7 @@ allocc <- do.call("rbind", allocc)
 allocc <- allocc[!is.na(allocc$longitude + allocc$latitude),]
 coordinates(allocc) <- c("longitude", "latitude")
 projection(allocc) <- '+proj=longlat +ellps=WGS84'
-allocc <- spTransform(allocc, crs(cali))
+allocc <- spTransform(allocc, prj)
 
 # and buffer polygons
 buffs <- list.files("C:/Lab_projects/2016_Phylomodelling/Output/Range_polygons/occurrence_buffers", full.names=T)
@@ -481,7 +473,7 @@ buffs <- list.files("C:/Lab_projects/2016_Phylomodelling/Output/Range_polygons/o
 rangemap <- function(dir){
         files <- list.files(dir, pattern="BinaryRangePrediction", full.names=T)
         if(length(files)==0) return("no maxent prediction")
-        rds2df <- function(x) as.data.frame(rasterToPoints(mask(readRDS(x), cali))) ##### this needs to change. ###
+        rds2df <- function(x) as.data.frame(rasterToPoints(readRDS(x)))
         r <- lapply(files, rds2df)
         for(i in 1:length(r)) r[[i]]$resolution <- c("810m", "25km", "50km")[i]
         r <- do.call("rbind", r)
