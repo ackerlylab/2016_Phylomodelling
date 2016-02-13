@@ -33,6 +33,11 @@ climnames <- sort(c("cwd","djf","jja","ppt")) #use sort to ensure correct names 
 ######### maxent models ###############
 spp_dirs <- list.dirs(model_dir, full.names=T, recursive=F)
 
+######### california boundary ############
+cali <- rgdal::readOGR("C:/Lab_projects/2016_Phylomodelling/Data/Shapefiles/states", "cb_2014_us_state_500k")
+cali <- cali[cali$NAME=="California",]
+cali <- spTransform(cali, crs(readRDS(paste0(clim_dir, "/", files[1]))))
+
 
 ######### thresholded predictions for each species #############
 
@@ -45,9 +50,11 @@ predictBinary <- function(model, predictors, threshold){
         return(pred)
 }
 
+# occurrence buffer shapefiles
+buffs <- list.files(paste0(project_stem_dir, "/Output/Range_polygons/occurrence_buffers"), full.names=T)
+
 cl <- makeCluster(nodes)
 registerDoParallel(cl)
-
 results <- foreach(spp = spp_dirs,
                    .packages=c("raster", "dismo")) %dopar% {
                            
@@ -56,12 +63,23 @@ results <- foreach(spp = spp_dirs,
                            p <- stack(lapply(files,function(x) readRDS(paste(clim_dir,x,sep="/"))))
                            names(p) <- climnames
                            bp <- predictBinary(m, p, maxent_threshold_stat)
+                           
+                           # clip to CA boundary and save
+                           bp <- mask(bp, cali)
                            saveRDS(bp, paste0(spp, "/BinaryRangePrediction.rds"))
+                           
+                           # save a version clipped to point buffer
+                           buff <- buffs[sub("\\.rds", "", basename(buffs)) == basename(spp)]
+                           buff <- readRDS(buff)
+                           bp <- mask(bp, buff)
+                           saveRDS(bp, paste0(spp, "/BufferClippedMaxent.rds"))
+                           
                            return("success")
                    }
-
 stopCluster(cl)
 table(unlist(results))
+
+
 
 
 
