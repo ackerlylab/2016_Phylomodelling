@@ -67,8 +67,8 @@ md <- foreach(spp = species,
                       # hull area
                       ha <- gArea(h)
                       
-                      # buffer (calculate distance, convert to m)
-                      dist <- r$buffer[r$spp==spp]
+                      # buffer (species-specific distance, converted to m)
+                      dist <- r$buffer[r$spp==spp] * 1000
                       b <- gBuffer(s, width=dist, byid=F)
                       
                       # save hull and buffer
