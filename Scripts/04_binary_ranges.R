@@ -86,11 +86,9 @@ table(unlist(results))
 
 ################# upscale to 25 and 50 km ###############
 
-### create 25k and 50k upscaled versions of binary range maps ###
-
 upscale <- function(file, template, tag){
         outfile <- sub("\\.rds", paste0("_", tag, ".rds"), file)
-        if(file.exists(outfile)) return("file already exists")
+        #if(file.exists(outfile)) return("file already exists")
         f <- readRDS(file)
         f <- as.data.frame(rasterToPoints(f))
         coordinates(f) <- c("x", "y")
@@ -101,50 +99,19 @@ upscale <- function(file, template, tag){
 
 pr_files <- list.files(pr_dir, pattern=".grd", full.names=T)
 
-cl <- makeCluster(nodes)
-registerDoParallel(cl)
-results <- foreach(spp = paste0(spp_dirs, "/BinaryRangePrediction.rds"),
-                   .packages=c("raster")) %dopar% {
-                           if(!file.exists(spp)) return("no maxent model")
-                           upscale(spp, template=raster(pr_files[1]), "25k")
-                           upscale(spp, template=raster(pr_files[2]), "50k")
-                           return("success")
-                   }
-stopCluster(cl)
+for(rangetype in c("BinaryRangePrediction.rds", "BufferClippedMaxent.rds")){
+        cl <- makeCluster(nodes)
+        registerDoParallel(cl)
+        results <- foreach(spp = paste0(spp_dirs, "/", rangetype),
+                           .packages=c("raster")) %dopar% {
+                                   if(!file.exists(spp)) return("no maxent model")
+                                   upscale(spp, template=raster(pr_files[1]), "25k")
+                                   upscale(spp, template=raster(pr_files[2]), "50k")
+                                   return("success")
+                           }
+        stopCluster(cl)
+}
 
-
-
-######### add range sizes to species table ############
-
-cl <- makeCluster(7)
-registerDoParallel(cl)
-r <- foreach(spp = spp_dirs,
-             .packages=c("raster")) %dopar% {
-                     if(!file.exists(paste0(spp, "/BinaryRangePrediction.rds"))) return("no data")
-                     rasters <- paste0(spp, "/BinaryRangePrediction", c("", "_25k", "_50k"), ".rds")
-                     ranges <- sapply(rasters, function(x) sum(na.omit(values(readRDS(x)))))
-                     return(ranges)
-             }
-stopCluster(cl)
-
-good <- sapply(r, length)==3
-rd <- r[good]
-rd <- lapply(rd, as.vector)
-rd <- do.call("rbind", rd)
-rd <- cbind(basename(spp_dirs[good]), as.data.frame(rd))
-names(rd) <- c("spp", "maxent810m", "maxent25km", "maxent50km")
-rd <- full_join(freqs, rd)
-rd <- select(rd, -X)
-rd <- select(rd, spp, nrecords, ncells, maxent810m, maxent25km, maxent50km)
-write.csv(rd, paste0(project_stem_dir, "/git_files/data/species_occurrence_counts.csv"), row.names=F)
-
-# pairs plots, linear and log scales
-png(paste0(richness_dir, "/species_range_scatterplot.png"), width=1000, height=1000)
-pairs(rd[,2:6], cex=.1)
-dev.off()
-png(paste0(richness_dir, "/species_range_scatterplot_loglog.png"), width=1000, height=1000)
-pairs(log10(rd[,2:6]), cex=.1)
-dev.off()
 
 
 
