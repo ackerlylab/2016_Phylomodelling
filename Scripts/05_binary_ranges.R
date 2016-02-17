@@ -134,6 +134,43 @@ allocc <- spTransform(allocc, prj)
 # and buffer polygons
 buffs <- list.files("C:/Lab_projects/2016_Phylomodelling/Output/Range_polygons/occurrence_buffers", full.names=T)
 
+# geom_holygon function from http://qiita.com/kohske/items/9272e29a75d32416ff5e fixes polygon hole bug in ggplot2::geom_polygon
+library(ggplot2)
+library(proto)
+library(grid)
+GeomHolygon <- ggproto(
+        "GeomHolygon", 
+        GeomPolygon,
+        extra_params = c("na.rm", "rule"),
+        draw_panel = function(data, scales, coordinates, rule) {
+                n <- nrow(data)
+                if (n == 1) 
+                        return(zeroGrob())
+                
+                munched <- coord_munch(coordinates, data, scales)
+                munched <- munched[order(munched$group), ]
+                
+                first_idx <- !duplicated(munched$group)
+                first_rows <- munched[first_idx, ]
+                
+                ggplot2:::ggname(
+                        "geom_holygon", 
+                        pathGrob(munched$x, munched$y, default.units = "native", 
+                                 id = munched$group, rule = rule, 
+                                 gp = gpar(col = first_rows$colour, 
+                                           fill = alpha(first_rows$fill, first_rows$alpha), 
+                                           lwd = first_rows$size * .pt, 
+                                           lty = first_rows$linetype)))
+        }
+)
+geom_holygon <- function (mapping = NULL, data = NULL, stat = "identity", position = "identity", 
+                          na.rm = FALSE, show.legend = NA, inherit.aes = TRUE, rule = "winding", ...) {
+        ggplot2::layer(data = data, mapping = mapping, stat = stat, geom = GeomHolygon, 
+                       position = position, show.legend = show.legend, inherit.aes = inherit.aes, 
+                       params = list(na.rm = na.rm , rule = rule, ...))
+}
+
+# function to generate chart
 rangemap <- function(dir){
         files <- list.files(dir, pattern="BinaryRangePrediction", full.names=T)
         if(length(files)==0) return("no maxent prediction")
@@ -147,11 +184,12 @@ rangemap <- function(dir){
         occ <- allocc[allocc$current_name_binomial==basename(dir),]
         occ <- as.data.frame(occ)
         occ$resolution <- "records"
+        occ$resolution_f <- factor(occ$resolution, levels=c("records", "810m", "25km", "50km"))
         occbg <- r[r$resolution=="810m",]
         occbg$resolution <- "records"
         occbg$presence <- 0
         r <- rbind(r, occbg)
-        r$resolution <- factor(r$resolution, levels=c("records", "810m", "25km", "50km"))
+        r$resolution_f <- factor(r$resolution, levels=c("records", "810m", "25km", "50km"))
         
         # add occurrence buffer
         buff <- buffs[sub("\\.rds", "", basename(buffs))==basename(dir)]
@@ -160,17 +198,17 @@ rangemap <- function(dir){
         buff <- gIntersection(buff, cali)
         buff <- fortify(buff)
         buff$resolution <- "810m"
+        buff$resolution_f <- factor(buff$resolution, levels=c("records", "810m", "25km", "50km"))
         
         eb <- ggplot2::element_blank()
         p <- ggplot() +
                 geom_raster(data=r, aes(x, y, fill=factor(presence))) +
                 geom_point(data=occ, aes(longitude, latitude), 
                            color="darkred", shape=3, size=3) +
-                geom_polygon(data=buff, aes(long, lat, group=group, order=order), 
-                             color=NA, fill="yellow", alpha=.5) +
-                #color="black", fill="black", alpha=.25, size=.5) +
+                geom_holygon(data=buff, aes(long, lat, group=group, order=order), 
+                             color=NA, fill="dodgerblue", alpha=.4) +
                 scale_fill_manual(values=c("gray80", "darkred")) +
-                facet_wrap(~resolution, nrow=1) +
+                facet_wrap(~resolution_f, nrow=1) +
                 coord_fixed(ratio=1.3) +
                 labs(title=paste0(basename(dir), "\n")) +
                 theme(panel.background=eb, panel.grid=eb, 
@@ -185,7 +223,7 @@ rangemap <- function(dir){
 cl <- makeCluster(nodes)
 registerDoParallel(cl)
 results <- foreach(spp = spp_dirs,
-                   .packages=c("raster", "ggplot2", "rgeos", "sp")) %dopar% {
+                   .packages=c("raster", "ggplot2", "rgeos", "sp", "grid", "proto")) %dopar% {
                            rangemap(spp)
                    }
 stopCluster(cl)
