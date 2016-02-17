@@ -81,7 +81,7 @@ for(rangetype in c("BinaryRangePrediction.rds", "BufferClippedMaxent.rds")){
 
 freqs <- read.csv(paste0(project_stem_dir, "/git_files/data/species_occurrence_counts.csv"), stringsAsFactors=F)
 
-d <- data.frame(x=NULL, y=NULL, richness=NULL, rangetype=NULL, resolution=NULL, min_cells=NULL)
+d <- NULL#data.frame(x=NULL, y=NULL, richness=NULL, , richness_scaled=NULL, rangetype=NULL, resolution=NULL, min_cells=NULL)
 for(rangetype in c("BinaryRangePrediction.rds", "BufferClippedMaxent.rds")){
         for(resolution in c("_810m", "_25k", "_50k")){
                 for(min_cells in c(0,10,30)){ # create richness maps for each of the three thresholds
@@ -131,7 +131,7 @@ for(rangetype in c("BinaryRangePrediction.rds", "BufferClippedMaxent.rds")){
                         
                         
                         names(r) <- c("x", "y", "richness")
-                        r$richness <- scale(r$richness)
+                        r$richness_scaled <- scale(r$richness)
                         r$rangetype <- rangetype
                         r$resolution <- resolution
                         r$min_cells <- min_cells
@@ -142,7 +142,20 @@ for(rangetype in c("BinaryRangePrediction.rds", "BufferClippedMaxent.rds")){
 
 # all 18 of the above charts on a single page
 d$resolution <- factor(sub("_", "", d$resolution), levels=c("810m", "25k", "50k"))
+
 p <- ggplot(d, aes(x, y, fill=richness)) +
+        geom_raster() +
+        scale_fill_viridis() +
+        coord_fixed(ratio=1) +
+        facet_grid(min_cells~rangetype+resolution) +
+        theme(panel.background=element_blank(), panel.grid=element_blank(),
+              axis.text=element_blank(), axis.title=element_blank(), axis.ticks=element_blank(),
+              legend.position="top", title=element_text(size=25)) +
+        guides(fill = guide_colorbar(barwidth=40)) +
+        labs(title=paste0("SPECIES RICHNESS"), fill="normalized richness   ")
+ggsave(paste0(richness_dir, "/richness_maps_all.png"), p, width=20, height=12, units="in")
+
+p <- ggplot(d, aes(x, y, fill=richness_scaled)) +
         geom_raster() +
         scale_fill_viridis() +
         coord_fixed(ratio=1) +
@@ -156,9 +169,6 @@ ggsave(paste0(richness_dir, "/richness_maps_normalized_all.png"), p, width=20, h
 
 
 
-
-
-stop() ###### this next section hasn't been updated and run for the latest models yet ######
 
 
 ############## comparison of STATISTICS: maxent, raw, rarefied ####################
@@ -176,7 +186,8 @@ for(res in c(25, 50)){
                 s <- tidyr::gather(s, rangetype, richness, rarefied, raw)
                 s$resolution <- paste0(res, "k")
                 s$min_cells <- thresh
-                s <- select(s, x, y, richness, rangetype, resolution, min_cells)
+                s$richness_scaled <- scale(s$richness)
+                s <- select(s, x, y, richness, richness_scaled, rangetype, resolution, min_cells)
                 if(res==25 & thresh==0) rr <- s else(rr <- rbind(rr, s))
         }
 }
@@ -184,58 +195,78 @@ for(res in c(25, 50)){
 
 for(res in c(25, 50)){
         for(thresh in c(0, 10, 30)){
-                
-                # combine maxent and point datasets
-                f <- rbind(d, rr)
-                f$richness <- as.vector(f$richness)
-                
-                # filter and restructure
-                s <- dplyr::filter(f, resolution==paste0(res, "k"), min_cells==thresh) %>%
-                        mutate(rangetype = sub("\\.rds", "", rangetype),
-                               rangetype = sub("BinaryRangePrediction", "Maxent", rangetype)) %>%
-                        select(x, y, rangetype, richness) %>%
-                        spread(rangetype, richness)
-                f <- select(s, -x, -y)
-                
-                # generate plot
-                panel.cor <- function(x, y, digits = 2, prefix = "", ...){
-                        usr <- par("usr"); on.exit(par(usr))
-                        par(usr = c(0, 1, 0, 1), new=T)
-                        r <- abs(cor(x, y, use="pairwise.complete.obs"))
-                        txt <- format(c(r, 0.123456789), digits = digits)[1]
-                        txt <- paste0(prefix, txt)
-                        cex.cor <- 0.3/strwidth(txt)
-                        cols <- colorRampPalette(c("darkred", "gray", "darkblue"))(100)
-                        plot(x, y, col=cols[cut((scale(y)-scale(x)), 100)], pch=16, cex=2)
-                        text(quantile(range(x, na.rm=T),.5), quantile(range(y, na.rm=T),.9), 
-                             txt, cex = cex.cor, col="black")
+                for(norm in c("raw", "normalized")){
+                        
+                        # combine maxent and point datasets
+                        f <- rbind(d, rr)
+                        if(norm=="normalized") f$richness <- f$richness_scaled
+                        f$richness <- as.vector(f$richness)
+                        f$richness_scaled <- as.vector(f$richness_scaled)
+                        
+                        # filter and restructure
+                        s <- dplyr::filter(f, resolution==paste0(res, "k"), min_cells==thresh) %>%
+                                mutate(rangetype = sub("\\.rds", "", rangetype),
+                                       rangetype = sub("BinaryRangePrediction", "Maxent", rangetype)) %>%
+                                select(x, y, rangetype, richness) %>%
+                                spread(rangetype, richness)
+                        f <- select(s, -x, -y)
+                        
+                        # pairs panel functions
+                        panel.cor <- function(x, y, digits=2, diffscale=F, ...){
+                                usr <- par("usr"); on.exit(par(usr))
+                                par(usr = c(0, 1, 0, 1), new=T)
+                                r <- abs(cor(x, y, use="pairwise.complete.obs"))
+                                txt <- format(c(r, 0.123456789), digits = digits)[1]
+                                cex.cor <- 0.3/strwidth(txt)
+                                cols <- colorRampPalette(c("darkred", "gray", "darkblue"))(100)
+                                diff <- y-x
+                                if(diffscale) diff <- scale(y)-scale(x) 
+                                plot(x, y, col=cols[cut(diff, 100)], pch=16, cex=2, axes=F)
+                                text(quantile(range(x, na.rm=T),.2), quantile(range(y, na.rm=T),.9), 
+                                     txt, cex = cex.cor, col="black")
+                                abline(0,1)
+                        }
+                        panel.hist <- function(x, ...){
+                                usr <- par("usr"); on.exit(par(usr))
+                                par(usr = c(usr[1:2], 0, 1.5) )
+                                h <- hist(x, plot = FALSE)
+                                breaks <- h$breaks; nB <- length(breaks)
+                                y <- h$counts; y <- y/max(y)
+                                rect(breaks[-nB], 0, breaks[-1], y, col = "gray", ...)
+                        }
+                        panel.diffmap <- function(x, y, diffscale=F, ...){
+                                usr <- par("usr"); on.exit(par(usr))
+                                par(usr = c(0, 1, 0, 1), new=T)
+                                rx <- scales::rescale(s$x, range(x, na.rm=T))
+                                ry <- scales::rescale(s$y, range(y, na.rm=T))
+                                cols <- colorRampPalette(c("darkred", "gray", "darkblue"))(100)
+                                cx <- 2.5; if(res==50) cx <- cx*2
+                                diff <- x-y
+                                if(diffscale) diff <- scale(x)-scale(y)
+                                plot(rx, ry, col=cols[cut(diff, 100)], pch=15, cex=cx, axes=F)
+                                text(quantile(range(rx, na.rm=T),.8), quantile(range(ry, na.rm=T),.95),
+                                     signif(max(na.omit(diff)), 3), cex=4, col="darkblue")
+                                text(quantile(range(rx, na.rm=T),.8), quantile(range(ry, na.rm=T),.85),
+                                     signif(mean(range(na.omit(diff))), 3), cex=4, col="gray")
+                                text(quantile(range(rx, na.rm=T),.8), quantile(range(ry, na.rm=T),.75),
+                                     signif(min(na.omit(diff)), 3), cex=4, col="darkred")
+                        }
+                        panel.txt <- function(x, y, labels, ...){
+                                text(x, y, labels, cex=4)
+                        }
+                        
+                        png(paste0(richness_dir, "/richness_stats_compared_", res, "km_n", thresh, "_", norm, ".png"), 1500, 1700)
+                        pairs(f, upper.panel=panel.diffmap, diag.panel = panel.hist, lower.panel=panel.cor, text.panel=panel.txt,
+                              main=paste0(norm, " richness stats compared, 1 point per ", paste0(res, "km"), " cell, min cells = ", thresh),
+                              cex.main=3, cex.axis=3)
+                        dev.off()
+                        
+                        png(paste0(richness_dir, "/richness_stats_compared_", res, "km_n", thresh, "_", norm, "_colorNorm.png"), 1500, 1700)
+                        pairs(f, upper.panel=panel.diffmap, diag.panel = panel.hist, lower.panel=panel.cor, text.panel=panel.txt,
+                              main=paste0(norm, " richness stats compared, 1 point per ", paste0(res, "km"), " cell, min cells = ", thresh),
+                              cex.main=3, cex.axis=3, diffscale=T)
+                        dev.off()
                 }
-                panel.hist <- function(x, ...){
-                        usr <- par("usr"); on.exit(par(usr))
-                        par(usr = c(usr[1:2], 0, 1.5) )
-                        h <- hist(x, plot = FALSE)
-                        breaks <- h$breaks; nB <- length(breaks)
-                        y <- h$counts; y <- y/max(y)
-                        rect(breaks[-nB], 0, breaks[-1], y, col = "gray", ...)
-                }
-                panel.map <- function(x, y, ...){
-                        usr <- par("usr"); on.exit(par(usr))
-                        par(usr = c(0, 1, 0, 1), new=T)
-                        rx <- scales::rescale(s$x, range(x, na.rm=T))
-                        ry <- scales::rescale(s$y, range(y, na.rm=T))
-                        cols <- colorRampPalette(c("darkred", "gray", "darkblue"))(100)
-                        cx <- 2.5; if(res==50) cx <- cx*2
-                        plot(rx, ry, col=cols[cut((scale(x)-scale(y)), 100)], pch=15, cex=cx)
-                }
-                panel.txt <- function(x, y, labels, ...){
-                        text(x, y, labels, cex=4)
-                }
-                
-                png(paste0(richness_dir, "/richness_stats_compared_", res, "km_n", thresh, ".png"), 1500, 1700)
-                pairs(f, upper.panel=panel.map, diag.panel = panel.hist, lower.panel=panel.cor, text.panel=panel.txt,
-                      main=paste0("Richness stats compared, 1 point per ", paste0(res, "km"), " cell, min cells = ", thresh),
-                      cex.main=3)
-                dev.off()
         }
 }
 
