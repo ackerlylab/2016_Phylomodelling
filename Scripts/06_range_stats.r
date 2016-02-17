@@ -9,7 +9,7 @@ library(dplyr)
 library(tidyr)
 
 
-#### point data ####
+####### point data #######
 
 # load climate
 r <- readRDS("C:/Lab_projects/2016_Phylomodelling/Data/Climate/BCM_normals/cwd_810m_filled3x.rds")
@@ -41,7 +41,6 @@ d <- d %>%
         group_by(spp) %>%
         summarize(ncells=n(),
                   nrecords=mean(nrecords))
-#write.csv(d, "C:/Lab_projects/2016_Phylomodelling/git_files/data/species_occurrence_counts.csv")
 
 # save ECDF chart of cells per species
 library(ggplot2)
@@ -55,11 +54,32 @@ p <- ggplot(d, aes(ncells)) +
 ggsave("C:/Lab_projects/2016_Phylomodelling/Output/Charts/pixels_per_species_ecdf.png", p, width=6, height=6, units="in")
         
 
+# max of minimum spanning tree distances (in meters)
+library(vegan)
+library(rgeos)
+library(sp)
+
+getSpan <- function(species){
+        z <- allocc[allocc$current_name_binomial==species,] %>%
+                as.data.frame() %>%
+                select(longitude, latitude) %>%
+                distinct()
+        coordinates(z) <- c("longitude", "latitude")
+        projection(z) <- projection(allocc)
+        z <- spTransform(z, crs('+proj=longlat +ellps=WGS84'))
+        dst <- geosphere::distm(z)
+        span <- spantree(dst)
+        return(max(span$dist))
+}
+d$span <- sapply(d$spp, getSpan)
+write.csv(d, "C:/Lab_projects/2016_Phylomodelling/git_files/data/species_max_spans.csv")
+d <- select(d, -span)
 
 
 
 
-#### raster and polygon data ####
+
+####### raster and polygon data #######
 
 model_dir <- paste0(project_stem_dir, "/Output/Maxent/v5")
 richness_dir <- paste0(project_stem_dir, "/Output/Richness/V5")
