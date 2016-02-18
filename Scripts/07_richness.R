@@ -139,10 +139,10 @@ for(rangetype in c("BinaryRangePrediction.rds", "BufferClippedMaxent.rds")){
                 }
         }
 }
-
-# all 18 of the above charts on a single page
 d$resolution <- factor(sub("_", "", d$resolution), levels=c("810m", "25k", "50k"))
 
+
+# all 18 of the above charts on a single page
 p <- ggplot(d, aes(x, y, fill=richness)) +
         geom_raster() +
         scale_fill_viridis() +
@@ -154,7 +154,6 @@ p <- ggplot(d, aes(x, y, fill=richness)) +
         guides(fill = guide_colorbar(barwidth=40)) +
         labs(title=paste0("SPECIES RICHNESS"), fill="normalized richness   ")
 ggsave(paste0(richness_dir, "/richness_maps_all.png"), p, width=20, height=12, units="in")
-
 p <- ggplot(d, aes(x, y, fill=richness_scaled)) +
         geom_raster() +
         scale_fill_viridis() +
