@@ -81,7 +81,7 @@ for(rangetype in c("BinaryRangePrediction.rds", "BufferClippedMaxent.rds")){
 
 freqs <- read.csv(paste0(project_stem_dir, "/git_files/data/species_occurrence_counts.csv"), stringsAsFactors=F)
 
-d <- NULL#data.frame(x=NULL, y=NULL, richness=NULL, , richness_scaled=NULL, rangetype=NULL, resolution=NULL, min_cells=NULL)
+d <- NULL
 for(rangetype in c("BinaryRangePrediction.rds", "BufferClippedMaxent.rds")){
         for(resolution in c("_810m", "_25k", "_50k")){
                 for(min_cells in c(0,10,30)){ # create richness maps for each of the three thresholds
@@ -140,14 +140,16 @@ for(rangetype in c("BinaryRangePrediction.rds", "BufferClippedMaxent.rds")){
         }
 }
 d$resolution <- factor(sub("_", "", d$resolution), levels=c("810m", "25k", "50k"))
-
+d$rangetype[d$rangetype=="BinaryRangePrediction.rds"] <- "raw maxent"
+d$rangetype[d$rangetype=="BufferClippedMaxent.rds"] <- "buffer clipped_maxent"
+d$min_cells <- paste("min", d$min_cells, "cells")
 
 # all 18 of the above charts on a single page
 p <- ggplot(d, aes(x, y, fill=richness)) +
         geom_raster() +
         scale_fill_viridis() +
         coord_fixed(ratio=1) +
-        facet_grid(min_cells~rangetype+resolution) +
+        facet_grid(min_cells~resolution+rangetype) +
         theme(panel.background=element_blank(), panel.grid=element_blank(),
               axis.text=element_blank(), axis.title=element_blank(), axis.ticks=element_blank(),
               legend.position="top", title=element_text(size=25)) +
@@ -158,7 +160,7 @@ p <- ggplot(d, aes(x, y, fill=richness_scaled)) +
         geom_raster() +
         scale_fill_viridis() +
         coord_fixed(ratio=1) +
-        facet_grid(min_cells~rangetype+resolution) +
+        facet_grid(min_cells~resolution+rangetype) +
         theme(panel.background=element_blank(), panel.grid=element_blank(),
               axis.text=element_blank(), axis.title=element_blank(), axis.ticks=element_blank(),
               legend.position="top", title=element_text(size=25)) +
