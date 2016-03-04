@@ -46,6 +46,7 @@ allocc <- spTransform(allocc, crs(r))
 v <- raster::extract(r, allocc)
 allocc <- allocc[!is.na(v),]
 
+stop()
 
 ############## experiment with a single species ###############
 
@@ -90,6 +91,14 @@ ggplot(s, aes(pred, mult, color=paste(bpred, bcombo))) +
         theme_minimal() +
         labs(x="maxent", y="gaussian distance")
 
+
+
+
+
+
+
+
+################## deprecated attempt1 is below this line #####################
 
 ############# what's the right kernel distance? get stats from many species ##############
 
@@ -173,9 +182,9 @@ weird <- s$spp[s$sigmax==500]
 s <- d %>%
         mutate(Var1=paste0("p", Var1)) %>%
         spread(Var1, Freq) %>%
-        mutate(prop = p10 / (p1 + p11))
+        mutate(prop = p10 / (p1 + p11)) #### should this be p11, or p1 + p11??
 
-ggplot(s, aes(prop, fill=factor(sigma), color=factor(sigma))) + 
+ggplot(s, aes(p1, fill=factor(sigma), color=factor(sigma))) + 
         geom_density(alpha=.2) +
         scale_x_log10()
 
@@ -183,5 +192,4 @@ s <- s %>%
         group_by(sigma) %>%
         summarize(prop=mean(prop))
 
-# don't want to add any binary area, just want to subtract
 
