@@ -2,7 +2,7 @@
 
 # Threshold Maxent predictions and upscale to coarser resolutions
 # Matthew Kling
-# Last updated February 2016
+# Last updated March 2016
 
 
 library(raster)
@@ -51,7 +51,8 @@ predictBinary <- function(model, predictors, threshold){
 }
 
 # occurrence buffer shapefiles
-buffs <- list.files(paste0(project_stem_dir, "/Output/Range_polygons/occurrence_buffers"), full.names=T)
+#buffs <- list.files(paste0(project_stem_dir, "/Output/Range_polygons/occurrence_buffers"), full.names=T)
+buffs <- list.files(paste0(project_stem_dir, "/Output/Range_polygons/buffered_hulls"), full.names=T)
 
 cl <- makeCluster(nodes)
 registerDoParallel(cl)
@@ -74,7 +75,8 @@ results <- foreach(spp = spp_dirs,
                            buff <- readRDS(buff)
                            buff <- spTransform(buff, crs(bp))
                            bp <- mask(bp, buff)
-                           saveRDS(bp, paste0(spp, "/BufferClippedMaxent.rds"))
+                           #saveRDS(bp, paste0(spp, "/BufferClippedMaxent.rds"))
+                           saveRDS(bp, paste0(spp, "/HullBufferClippedMaxent.rds"))
                            
                            return("success")
                    }
@@ -132,7 +134,8 @@ projection(allocc) <- '+proj=longlat +ellps=WGS84'
 allocc <- spTransform(allocc, prj)
 
 # and buffer polygons
-buffs <- list.files("C:/Lab_projects/2016_Phylomodelling/Output/Range_polygons/occurrence_buffers", full.names=T)
+#buffs <- list.files("C:/Lab_projects/2016_Phylomodelling/Output/Range_polygons/occurrence_buffers", full.names=T)
+buffs <- list.files("C:/Lab_projects/2016_Phylomodelling/Output/Range_polygons/buffered_hulls", full.names=T)
 
 # geom_holygon function from http://qiita.com/kohske/items/9272e29a75d32416ff5e fixes polygon hole bug in ggplot2::geom_polygon
 library(ggplot2)
@@ -206,7 +209,7 @@ rangemap <- function(dir){
                 geom_point(data=occ, aes(longitude, latitude), 
                            color="darkred", shape=3, size=3) +
                 geom_holygon(data=buff, aes(long, lat, group=group, order=order), 
-                             color=NA, fill="dodgerblue", alpha=.4) +
+                             color="orange", fill=NA, size=1) +
                 scale_fill_manual(values=c("gray80", "darkred")) +
                 facet_wrap(~resolution_f, nrow=1) +
                 coord_fixed(ratio=1.3) +

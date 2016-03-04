@@ -11,7 +11,7 @@ outdir <- paste0(project_stem_dir, "/Output/Range_polygons")
 
 
 # get CRS
-proj <- crs(raster("C:/Lab_projects/2016_Phylomodelling/Output/Richness/V5/richness_810m_min0.tif"))
+proj <- crs(raster("C:/Lab_projects/2016_Phylomodelling/Output/Richness/V4/richness_810m_min0.tif"))
 
 # load occurrences
 allocc <- list.files("C:/Lab_projects/2016_Phylomodelling/Data/Species/processed3/atomic", full.names=T)
@@ -41,14 +41,13 @@ r <- foreach(spp = species,
                      h <- gConvexHull(s)
                      h <- gIntersection(h, cali)
                      if(is.null(h)) return(NA)
-                     ha <- gArea(h)
-                     return(ha)
+                     return(gArea(h))
              }
 stopCluster(cl)
 
 # get buffer distances based on hull areas
 r <- data.frame(spp=species, hull=unlist(r))
-r$sqrt_hull <- sqrt(r$hull)
+r$sqrt_hull <- sqrt(r$hull) # because sqrt represents the geometric relationship between distance and area
 r$buffer <- scales::rescale(r$sqrt_hull, c(10, 50))
 
 
@@ -58,21 +57,16 @@ registerDoParallel(cl)
 md <- foreach(spp = species,
               .packages=c("sp", "rgeos")) %dopar% {
                       
-                      # geospatial convex hull, clipped to coastline
                       s <- allocc[allocc$current_name_binomial==spp,]
-                      h <- gConvexHull(s)
-                      h <- gIntersection(h, cali)
-                      if(is.null(h)) return(NA)
+                      if(nrow(s)<2) return(NA)
+                      dist <- r$buffer[r$spp==spp] * 1000  # species-specific buffer distance, converted to m to match projection
+                      h <- gConvexHull(s) # compute convex hull
+                      hb <- gBuffer(h, width=dist, byid=F)  # buffer hull before clipping, or RAM blows up
+                      h <- gIntersection(h, cali)  # clip hull to CA coastline
+                      pb <- gBuffer(s, width=dist, byid=F) # buffer points
                       
-                      # hull area
-                      ha <- gArea(h)
-                      
-                      # buffer (species-specific distance, converted to m)
-                      dist <- r$buffer[r$spp==spp] * 1000
-                      b <- gBuffer(s, width=dist, byid=F)
-                      
-                      # save hull and buffer
                       saveRDS(h, paste0(outdir, "/convex_hulls/", spp, ".rds"))
-                      saveRDS(b, paste0(outdir, "/occurrence_buffers/", spp, ".rds"))
+                      saveRDS(pb, paste0(outdir, "/occurrence_buffers/", spp, ".rds"))
+                      saveRDS(hb, paste0(outdir, "/buffered_hulls/", spp, ".rds"))
               }
 stopCluster(cl)
