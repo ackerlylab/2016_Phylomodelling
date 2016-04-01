@@ -45,7 +45,7 @@ predictBinary <- function(model, predictors, threshold){
         # function to determine threshold, make model prediction, and return threshold prediction
         eval <- evaluate(model@presence, model@absence, model)
         thresh <- threshold(eval, stat=threshold)
-        pred <- predict(m, predictors)
+        pred <- predict(model, predictors)
         pred <- reclassify(pred, c(0, thresh, 0, thresh, 1, 1))
         return(pred)
 }
@@ -122,16 +122,10 @@ for(rangetype in c("BinaryRangePrediction.rds", "BufferClippedMaxent.rds")){
 ######## export png range maps for each species ###########
 
 # get correct projection
-prj <- crs(readRDS(paste0(spp_dirs[1], "/BinaryRangePrediction.rds")))
+#prj <- crs(readRDS(paste0(spp_dirs[1], "/BinaryRangePrediction.rds")))
 
 # load occurrences
-allocc <- list.files("C:/Lab_projects/2016_Phylomodelling/Data/Species/processed3/atomic", full.names=T)
-allocc <- lapply(allocc, readRDS)
-allocc <- do.call("rbind", allocc)
-allocc <- allocc[!is.na(allocc$longitude + allocc$latitude),]
-coordinates(allocc) <- c("longitude", "latitude")
-projection(allocc) <- '+proj=longlat +ellps=WGS84'
-allocc <- spTransform(allocc, prj)
+allocc <- readRDS("C:/Lab_projects/2016_Phylomodelling/Data/Species/occurrences_clean.rds")
 
 # and buffer polygons
 #buffs <- list.files("C:/Lab_projects/2016_Phylomodelling/Output/Range_polygons/occurrence_buffers", full.names=T)
