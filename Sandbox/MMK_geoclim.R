@@ -22,18 +22,18 @@ odir <- "C:/Lab_projects/2016_Phylomodelling/Output/Niche"
 species_list <- paste0(spdir, 'combined/0_Species_list_v2.rdata')
 maxent_background <- paste(spdir, 'combined/10000_CA_plants_bg_810m_occbias.rdata', sep='')
 
+# load climate data
+files <- list.files(path=cdir, pattern='810m_filled3x', full.names=FALSE)
+climnames <- sort(c("cwd","djf","jja","ppt")) #use sort to ensure correct names used for clim
+clim <- stack(lapply(files, function(x) readRDS(paste(cdir,x,sep="/"))))
+names(clim) <-  climnames
+
 
 # california boundary
 cali <- rgdal::readOGR("C:/Lab_projects/2016_Phylomodelling/Data/Shapefiles/states", "cb_2014_us_state_500k")
 cali <- cali[cali$NAME=="California",]
 cali <- spTransform(cali, crs(readRDS(paste0(cdir, "/", files[1]))))
 
-
-# load climate data
-files <- list.files(path=cdir, pattern='810m_filled3x', full.names=FALSE)
-climnames <- sort(c("cwd","djf","jja","ppt")) #use sort to ensure correct names used for clim
-clim <- stack(lapply(files, function(x) readRDS(paste(cdir,x,sep="/"))))
-names(clim) <-  climnames
 clim <- mask(clim, cali)
 
 
@@ -225,12 +225,18 @@ for(method in c("pca", "tsne", "nmds", "som", "sammon")){
 
 
 ##############################
-# how globally and locally rare is each pixels climate?
+# how regionally and locally rare is each pixels climate?
+
+library(MASS)
+library(FNN)
+
+
+#### regional #####
 
 # kernel density in climate space
 vals <- na.omit(values(pc))
 vals <- apply(vals, 2, scales::rescale)
-kdd <- kde2d(vals[,1], vals[,2], n=100, h=.25)
+kdd <- kde2d(vals[,1], vals[,2], n=100, h=.5)
 kd <- kdd$z
 #image(kd); points(vals[sample(nrow(vals), 5000),], cex=.2)
 
@@ -248,7 +254,7 @@ gd <- as.data.frame(rasterToPoints(density))
 geo <- ggplot(gd, aes(x, y, fill=-density+max(gd$density))) + 
         geom_raster() + 
         scale_fill_viridis() +
-        labs(title="climate rarity\n",
+        labs(title="regionwide rarity of local climate\n",
              fill="rarity") +
         coord_fixed() +
         style +
@@ -269,3 +275,90 @@ print(env,
                   width = unit(0.5, "npc"), height = unit(0.35, "npc"),
                   just = c("left", "bottom")))
 dev.off()
+
+
+
+
+
+
+################ local ###############
+
+
+focal_stack <- function(r, fun, radius, circular=T, ...){
+        
+        # todo:
+        # allow for arbitrary number of output layers
+        # implement parallel processing
+        
+        rad <- radius
+        r <- extend(r, rad)
+        a <- as.array(r)
+        atemplate <- a
+        rtemplate <- r
+        
+        #nchunks <- 6
+        #groups <- as.integer(cut(1:nrow(a), seq(0, nrow(a), nrow(a)/nchunks)))
+        
+        # circular mask
+        if(circular){
+                diam <- rad * 2 + 1
+                m <- matrix(1, diam,diam)
+                m <- cbind(rep(1:nrow(m), ncol(m)), rep(1:ncol(m), each=nrow(m)))
+                m <- m - m[nrow(m)/2+.5,]
+                m <- apply(m, 1, function(x) sqrt(sum(x^2)))
+                m <- matrix(m, diam, diam)
+                m[m <= m[rad+1, 1]] <- 1
+                m[m != 1] <- NA
+                m <- array(rep(m, dim(a)[3]), c(diam, diam, dim(a)[3]))
+        }
+        
+        for(i in 1:nrow(a)){
+                for(j in 1:ncol(a)){
+                        if(is.na(a[i,j,1])) next()
+                        w <- a[(i-rad):(i+rad), (j-rad):(j+rad),]
+                        if(circular) w <- w * m
+                        atemplate[i,j,] <- fun(w, ...)
+                }
+        }
+        
+        values(rtemplate) <- atemplate
+        return(rtemplate)
+}
+
+isolation <- function(w){
+        require(depth)
+        center <- nrow(w)/2+.5
+        e <- w[center, center,]
+        w <- apply(w, 3, function(d)d)
+        w <- na.omit(w)
+        i <- .5 - depth(e, w)
+        return(i)
+}
+
+heterogeneity <- function(w){
+        center <- nrow(w)/2+.5
+        w <- apply(w, 3, function(d)d)
+        w <- na.omit(w)
+        h <- chull(w)
+        h <- c(h, h[1])
+        h <- w[h,]
+        h <- Polygon(h, hole=F)
+        h <- h@area
+        return(h)
+}
+
+
+radius <- 100 / .810 # 100km search radius, in pixels
+
+iso <- focal_stack(pc, isolation, radius)[[1]]
+writeRaster(iso, "C:/Lab_projects/2016_Phylomodelling/Output/Climate/isolation.tif", overwrite=T)
+
+het <- focal_stack(pc, heterogeneity, radius)[[1]]
+writeRaster(het, "C:/Lab_projects/2016_Phylomodelling/Output/Climate/heterogeneity.tif", overwrite=T)
+
+locrar <- iso * het
+writeRaster(locrar, "C:/Lab_projects/2016_Phylomodelling/Output/Climate/local_rarity.tif", overwrite=T)
+
+
+
+
